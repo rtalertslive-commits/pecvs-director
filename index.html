@@ -742,8 +742,13 @@
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <div style="display:flex; gap:14px; align-items:center;">
-                        <p class="card-title" style="margin:0;"><i class="fa fa-file-contract"></i> Reportes Coaches</p>
-                        <div style="min-width:200px;">
+                        <p class="card-title" style="margin:0;"><i class="fa fa-file-contract"></i> Reportes Mensuales</p>
+                        <div style="min-width:180px;">
+                            <select id="rpt-prom-sel" onchange="refreshTeamSelects(); renderReporteHistory()" style="padding:6px 10px; font-size:11px;">
+                                <option value="">Todos los promotores</option>
+                            </select>
+                        </div>
+                        <div style="min-width:180px;">
                             <select id="rpt-team-sel" onchange="renderReporteHistory()"
                                 style="padding:6px 10px; font-size:11px;">
                                 <option value="">Todos los equipos</option>
@@ -782,8 +787,8 @@
                 <h2><i class="fa fa-cog"></i> Configuración Promotor</h2>
                 <div style="display:flex;flex-direction:column;gap:20px;">
                     <div>
-                        <label class="field-label">Nombre del Promotor</label>
-                        <input type="text" id="inp-promotor" placeholder="Tu nombre">
+                        <label class="field-label">Nombre del Director</label>
+                        <input type="text" id="inp-director" placeholder="Tu nombre">
                     </div>
                     <div>
                         <label class="field-label">Código de Promotoría</label>
@@ -798,10 +803,10 @@
                             director para compartirle tus datos.</p>
                     </div>
                     <div>
-                        <p class="section-label">Coaches Vinculados</p>
-                        <div class="agent-list" id="coach-list"></div>
+                        <p class="section-label">Promotores Vinculados</p>
+                        <div class="agent-list" id="promotor-list"></div>
                     </div>
-                    <button class="btn btn-green" onclick="saveConfigPromotor()"><i class="fa fa-floppy-disk"></i>
+                    <button class="btn btn-green" onclick="saveConfigDirector()"><i class="fa fa-floppy-disk"></i>
                         Guardar configuración</button>
                 </div>
             </div>
@@ -1373,3 +1378,5 @@
 </body>
 
 </html>
+
+
