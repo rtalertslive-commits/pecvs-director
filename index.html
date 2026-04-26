@@ -812,6 +812,7 @@
 
         <!-- TAB NAV -->
         <div class="tab-nav">
+            <button class="tab-btn" onclick="switchTab('bitacora',this)"><i class="fa fa-book-open"></i> Bitácora</button>
             <button class="tab-btn active" onclick="switchTab('leaderboard',this)"><i class="fa fa-table"></i> Leaderboard /
                 Ratios</button>
             <button class="tab-btn" onclick="switchTab('kpis',this)"><i class="fa fa-chart-column"></i>
@@ -819,6 +820,8 @@
             <button class="tab-btn" onclick="switchTab('charts',this)"><i class="fa fa-chart-area"></i>
                 Tendencias</button>
             <button class="tab-btn" onclick="switchTab('reporte',this)"><i class="fa fa-file-lines"></i> Reportes de Coaches</button>
+            <button class="tab-btn" onclick="switchTab('reporte-promotores',this)"><i class="fa fa-clipboard-list"></i> Reportes de Promotores</button>
+            <button class="tab-btn" onclick="switchTab('gestion',this)"><i class="fa fa-users-gear"></i> Gestión de Equipo <span id="pending-badge" style="display:none; background:var(--red); color:#fff; border-radius:10px; font-size:10px; padding:1px 6px; margin-left:4px;">0</span></button>
         </div>
 
         <!-- ═══════════════════════════════ TAB: LEADERBOARD ═══════════════════════════════ -->
@@ -1047,37 +1050,340 @@
 
         <!-- ═══════════════════ TAB: REPORTES DE COACHES ═══════════════════ -->
         <div id="tab-reporte" class="tab-panel">
-            <div class="card">
-                <p class="card-title"><i class="fa fa-file-lines"></i> Reportes de Coaches</p>
-                <p style="font-size:12px;color:var(--slate);margin-bottom:15px;">
-                    Visualiza los reportes mensuales enviados por los coaches de tu equipo, incluyendo análisis, fraude, compromisos y reclutamiento.
-                </p>
-                <div class="charts-controls" style="margin-bottom:20px;">
-                    <div>
-                        <label class="field-label">Equipo Promotor</label>
-                        <select id="rpt-promotor-filter" onchange="refreshCoachFilters(); renderCoachReportes()">
-                            <option value="">Todos los promotores</option>
-                        </select>
+            <!-- Sub-tab switcher -->
+            <div style="display:flex; gap:8px; margin-bottom:20px;">
+                <button id="rpt-sub-btn-ventas" onclick="switchReporteSub('ventas')" style="padding:8px 18px; border-radius:8px; border:none; background:var(--gold); color:#000; font-weight:700; font-size:13px; cursor:pointer;">📊 Reportes de Ventas</button>
+                <button id="rpt-sub-btn-reclutamiento" onclick="switchReporteSub('reclutamiento')" style="padding:8px 18px; border-radius:8px; border:none; background:rgba(255,255,255,0.08); color:var(--white); font-weight:600; font-size:13px; cursor:pointer;">👥 Reclutamiento 2026</button>
+            </div>
+
+            <!-- VENTAS SECTION -->
+            <div id="rpt-section-ventas">
+                <div class="card">
+                    <p class="card-title"><i class="fa fa-chart-line"></i> Reportes de Ventas</p>
+                    <p style="font-size:12px;color:var(--slate);margin-bottom:15px;">Análisis mensual, sospecha de fraude, compromisos y notas de cada coach.</p>
+                    <div class="charts-controls" style="margin-bottom:20px;">
+                        <div>
+                            <label class="field-label">Equipo Promotor</label>
+                            <select id="rpt-promotor-filter" onchange="refreshCoachFilters(); renderCoachReportes()">
+                                <option value="">Todos los promotores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Equipo Coach</label>
+                            <select id="rpt-coach-filter" onchange="renderCoachReportes()">
+                                <option value="">Todos los coaches</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Mes</label>
+                            <select id="rpt-mes-filter" onchange="renderVentasSection()">
+                                <option value="">Todos los meses</option>
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label class="field-label">Equipo Coach</label>
-                        <select id="rpt-coach-filter" onchange="renderCoachReportes()">
-                            <option value="">Todos los coaches</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="field-label">Mes</label>
-                        <select id="rpt-mes-filter" onchange="renderCoachReportes()">
-                            <option value="">Todos los meses</option>
-                        </select>
+                    <div id="coach-reportes-list" style="display:flex;flex-direction:column;gap:16px;">
+                        <div class="empty-state"><i class="fa fa-inbox"></i>Cargando reportes...</div>
                     </div>
                 </div>
-                <div id="coach-reportes-list" style="display:flex;flex-direction:column;gap:16px;">
-                    <div class="empty-state"><i class="fa fa-inbox"></i>Cargando reportes...</div>
+            </div>
+
+            <!-- RECLUTAMIENTO SECTION -->
+            <div id="rpt-section-reclutamiento" style="display:none;">
+                <div class="card">
+                    <p class="card-title"><i class="fa fa-user-plus"></i> Reclutamiento</p>
+                    <p style="font-size:12px;color:var(--slate);margin-bottom:15px;">Seguimiento mensual de reclutamiento por coach. <span style="color:var(--green);font-weight:600;">Verde = Sí</span> · <span style="color:var(--red);font-weight:600;">Rojo = No</span> · Gris = Mes pendiente</p>
+                    <div class="charts-controls" style="margin-bottom:20px;">
+                        <div>
+                            <label class="field-label">Equipo Promotor</label>
+                            <select id="recl-promotor-filter" onchange="refreshReclCoachFilter(); renderReclutamientoSection()">
+                                <option value="">Todos los promotores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Equipo Coach</label>
+                            <select id="recl-coach-filter" onchange="renderReclutamientoSection()">
+                                <option value="">Todos los coaches</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Año</label>
+                            <select id="recl-year-filter" onchange="renderReclutamientoSection()">
+                                <option value="">Todos los años</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="reclutamiento-grid" style="display:flex;flex-direction:column;gap:16px;">
+                        <div class="empty-state"><i class="fa fa-inbox"></i>Cargando...</div>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- ═══════════════════ TAB: BITÁCORA ═══════════════════ -->
+        <div id="tab-bitacora" class="tab-panel">
+            <div class="card">
+                <p class="card-title"><i class="fa fa-book-open"></i> Bitácora de Agentes <span style="font-size:12px;font-weight:400;color:var(--slate);">(solo lectura, para efectos de supervisión)</span></p>
+                <div class="info-box">
+                    <strong>Embudo PECVS$:</strong> P ≥ E ≥ C ≥ V &nbsp;|&nbsp;
+                    P=Contactos · E=Entrevistas · C=Cotizaciones · V=Cierres · S=Solicitudes · $=Prima Neta
+                </div>
+                <div class="bitacora-header">
+                    <div>
+                        <label class="field-label">Coach</label>
+                        <select id="bit-coach-filter" onchange="refreshBitAgentSelect()">
+                            <option value="">— Todos los coaches —</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="field-label">Agente</label>
+                        <select id="bit-agent" onchange="autoLoadBit()">
+                            <option value="">— Selecciona agente —</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="field-label">Mes</label>
+                        <select id="bit-month" onchange="updateBitCalendar()">
+                            <option value="1">Enero</option><option value="2">Febrero</option>
+                            <option value="3">Marzo</option><option value="4" selected>Abril</option>
+                            <option value="5">Mayo</option><option value="6">Junio</option>
+                            <option value="7">Julio</option><option value="8">Agosto</option>
+                            <option value="9">Septiembre</option><option value="10">Octubre</option>
+                            <option value="11">Noviembre</option><option value="12">Diciembre</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="field-label">Año</label>
+                        <input type="number" id="bit-year" value="2026" min="2020" max="2040" onchange="updateBitCalendar()" style="width:100px;">
+                    </div>
+                    <div>
+                        <label class="field-label">Semana</label>
+                        <select id="bit-semana" onchange="autoLoadBit()"></select>
+                    </div>
+                </div>
+                <div id="bit-week-info" style="font-size:11px;color:var(--teal);margin-bottom:10px;"></div>
+                <table class="week-table">
+                    <thead>
+                        <tr>
+                            <th>Día</th>
+                            <th>P — Contactos</th><th>E — Entrevistas</th><th>C — Cotizaciones</th>
+                            <th>V — Cierres</th><th>S — Solicitudes</th><th>$ — Prima Neta</th><th>Semáforo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bit-week-body"></tbody>
+                    <tfoot>
+                        <tr>
+                            <td class="day-label">TOTAL SEM</td>
+                            <td class="total-cell" id="bit-tt-P">0</td>
+                            <td class="total-cell" id="bit-tt-E">0</td>
+                            <td class="total-cell" id="bit-tt-C">0</td>
+                            <td class="total-cell" id="bit-tt-V">0</td>
+                            <td class="total-cell" id="bit-tt-S">0</td>
+                            <td class="total-cell" id="bit-tt-$">$0</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="day-label">TOTAL MES</td>
+                            <td class="total-cell" id="bit-ttm-P">0</td>
+                            <td class="total-cell" id="bit-ttm-E">0</td>
+                            <td class="total-cell" id="bit-ttm-C">0</td>
+                            <td class="total-cell" id="bit-ttm-V">0</td>
+                            <td class="total-cell" id="bit-ttm-S">0</td>
+                            <td class="total-cell" id="bit-ttm-$">$0</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <div class="save-row" style="justify-content:flex-end;">
+                    <button class="btn btn-sm" onclick="renderBitHistory();document.getElementById('modal-bit-log').classList.add('open')">
+                        <i class="fa fa-list"></i> Ver log (todos los registros)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════ TAB: REPORTES DE PROMOTORES ═══════════════════ -->
+        <div id="tab-reporte-promotores" class="tab-panel">
+            <!-- Sub-tab switcher -->
+            <div style="display:flex;gap:8px;margin-bottom:20px;">
+                <button id="prpt-sub-btn-recl" onclick="switchPromoterReporteSub('recl')" style="padding:8px 18px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:700;font-size:13px;cursor:pointer;">👥 Reclutamiento</button>
+                <button id="prpt-sub-btn-venta" onclick="switchPromoterReporteSub('venta')" style="padding:8px 18px;border-radius:8px;border:none;background:rgba(255,255,255,0.08);color:var(--white);font-weight:600;font-size:13px;cursor:pointer;">🎓 Venta de Carrera de Coach</button>
+            </div>
+
+            <!-- RECLUTAMIENTO SECTION -->
+            <div id="prpt-section-recl">
+                <div class="card">
+                    <p class="card-title"><i class="fa fa-people-group"></i> Reclutamiento de Promotores</p>
+                    <p style="font-size:12px;color:var(--slate);margin-bottom:15px;">¿Tienen prospectos en entrenamiento? <span style="color:var(--green);font-weight:600;">Verde = Sí</span> · <span style="color:var(--red);font-weight:600;">Rojo = No</span> · Gris = Mes pendiente</p>
+                    <div class="charts-controls" style="margin-bottom:20px;">
+                        <div>
+                            <label class="field-label">Promotor</label>
+                            <select id="prpt-recl-promotor-filter" onchange="renderPromoterReclSection()">
+                                <option value="">Todos los promotores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Año</label>
+                            <select id="prpt-recl-year-filter" onchange="renderPromoterReclSection()">
+                                <option value="">Todos los años</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="promoter-recl-grid" style="display:flex;flex-direction:column;gap:16px;">
+                        <div class="empty-state"><i class="fa fa-inbox"></i>Cargando...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VENTA DE CARRERA SECTION -->
+            <div id="prpt-section-venta" style="display:none;">
+                <div class="card">
+                    <p class="card-title"><i class="fa fa-user-graduate"></i> Venta de Carrera de Coach</p>
+                    <p style="font-size:12px;color:var(--slate);margin-bottom:15px;">¿Tienen agentes en mente para coach? <span style="color:var(--green);font-weight:600;">Verde = Sí</span> · <span style="color:var(--red);font-weight:600;">Rojo = No</span> · Gris = Mes pendiente</p>
+                    <div class="charts-controls" style="margin-bottom:20px;">
+                        <div>
+                            <label class="field-label">Promotor</label>
+                            <select id="prpt-venta-promotor-filter" onchange="renderPromoterVentaSection()">
+                                <option value="">Todos los promotores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="field-label">Año</label>
+                            <select id="prpt-venta-year-filter" onchange="renderPromoterVentaSection()">
+                                <option value="">Todos los años</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="promoter-venta-grid" style="display:flex;flex-direction:column;gap:16px;">
+                        <div class="empty-state"><i class="fa fa-inbox"></i>Cargando...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════ TAB: GESTIÓN DE EQUIPO ═══════════════════ -->
+        <div id="tab-gestion" class="tab-panel">
+            <div class="card" style="margin-bottom:20px;">
+                <p class="card-title"><i class="fa fa-clock"></i> Solicitudes Pendientes de Aprobación</p>
+                <p style="font-size:12px; color:var(--slate); margin-bottom:16px;">Usuarios que solicitaron acceso y esperan tu aprobación para unirse al equipo.</p>
+                <div id="pending-list">
+                    <div class="empty-state"><i class="fa fa-inbox"></i>No hay solicitudes pendientes.</div>
+                </div>
+            </div>
+            <div class="card">
+                <p class="card-title"><i class="fa fa-users"></i> Gestionar Equipo Activo</p>
+                <p style="font-size:12px; color:var(--slate); margin-bottom:6px;">
+                    Edita el rol o código de asignación de cualquier miembro y pulsa <strong style="color:var(--gold);">Guardar</strong>.
+                    Al cambiar el rol, el miembro migra de colección automáticamente — sus dependientes quedan huérfanos hasta que los reasignes manualmente.
+                </p>
+                <div style="margin-bottom:14px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <input type="text" id="gestion-search" placeholder="🔍 Buscar por nombre, email o clave..." oninput="renderGestionAll()" style="max-width:320px; padding:8px 12px; font-size:12px;">
+                    <select id="gestion-role-filter" onchange="renderGestionAll()" style="width:auto; min-width:130px; padding:8px; font-size:12px;">
+                        <option value="">Todos los roles</option>
+                        <option value="promoter">📊 Promotores</option>
+                        <option value="coach">🧑‍🏫 Coaches</option>
+                        <option value="agent">👤 Agentes</option>
+                    </select>
+                </div>
+                <!-- Column headers -->
+                <div style="display:grid; grid-template-columns:2fr 80px 1fr 1fr auto; gap:8px; padding:6px 14px; font-size:9px; color:var(--slate); font-weight:700; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid var(--border); margin-bottom:8px;">
+                    <div>Miembro</div>
+                    <div>Clave</div>
+                    <div>Rol</div>
+                    <div>Asignado a (código)</div>
+                    <div></div>
+                </div>
+                <div id="gestion-all-list"></div>
+            </div>
+        </div>
+
+    </div><!-- end .app -->
+
+    <!-- PROMOTER REPORT DETAIL MODAL -->
+    <div class="modal-overlay" id="prpt-detail-modal">
+        <div class="modal-box" style="max-width:480px;">
+            <button class="modal-close" onclick="document.getElementById('prpt-detail-modal').classList.remove('open')">&times;</button>
+            <h2 style="font-family:'Playfair Display',serif;color:var(--green);margin-top:0;font-size:20px;" id="prpt-detail-title"></h2>
+            <div id="prpt-detail-header" style="font-size:12px;color:var(--slate);margin-bottom:16px;"></div>
+            <div id="prpt-detail-content" style="display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.6;"></div>
+            <button class="btn btn-sm" style="margin-top:20px;width:100%;" onclick="document.getElementById('prpt-detail-modal').classList.remove('open')">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- REGISTER OVERLAY (Director self-registers) -->
+    <div id="register-overlay" style="display:none; position:fixed; inset:0; background:radial-gradient(circle at top right,#1e293b,#0f172a); z-index:10001; align-items:center; justify-content:center; flex-direction:column; padding:20px;">
+        <div class="login-card" style="max-width:440px;">
+            <div style="font-size:40px; margin-bottom:16px;">🏢</div>
+            <h1 style="font-family:'Playfair Display',serif; color:var(--gold); margin-bottom:8px;">Crear Cuenta de Director</h1>
+            <p style="color:var(--slate); font-size:13px; margin-bottom:24px;">Esta cuenta no está registrada como Director. Crea tu cuenta para comenzar.</p>
+            <div style="text-align:left; display:flex; flex-direction:column; gap:14px; margin-bottom:20px;">
+                <div>
+                    <label style="font-size:11px; color:var(--slate); font-weight:700; display:block; margin-bottom:5px;">CONTRASEÑA DE ACCESO</label>
+                    <input type="password" id="reg-dir-pass" placeholder="Contraseña requerida" style="width:100%;">
+                    <p style="font-size:10px; color:var(--red); margin:5px 0 0; display:none;" id="reg-pass-err">Contraseña incorrecta.</p>
+                </div>
+                <div>
+                    <label style="font-size:11px; color:var(--slate); font-weight:700; display:block; margin-bottom:5px;">TU NOMBRE COMPLETO</label>
+                    <input type="text" id="reg-dir-name" placeholder="Ej. Franco Director" style="width:100%;">
+                </div>
+                <div>
+                    <label style="font-size:11px; color:var(--slate); font-weight:700; display:block; margin-bottom:5px;">TU CÓDIGO DE DIRECTOR</label>
+                    <input type="text" id="reg-dir-code" placeholder="Ej. 1000" style="width:100%; text-transform:uppercase;">
+                    <p style="font-size:10px; color:var(--slate); margin:5px 0 0;">Este código lo compartirás con tus promotores para que se vinculen a ti.</p>
+                </div>
+            </div>
+            <button id="reg-dir-btn" onclick="submitDirectorRegistration()" style="width:100%; padding:13px; border-radius:10px; background:var(--gold); color:var(--bg); border:none; font-size:14px; font-weight:700; cursor:pointer;">
+                <i class="fa fa-crown"></i> Crear mi cuenta de Director
+            </button>
+            <button onclick="doSignOut()" style="width:100%; margin-top:10px; padding:10px; border-radius:10px; background:none; border:1px solid rgba(255,255,255,0.15); color:var(--slate); font-size:13px; cursor:pointer;">Salir</button>
+        </div>
+    </div>
+
+    <!-- PENDING OVERLAY -->
+    <div id="pending-overlay" style="display:none; position:fixed; inset:0; background:radial-gradient(circle at top right,#1e293b,#0f172a); z-index:10001; align-items:center; justify-content:center; flex-direction:column; padding:20px;">
+        <div class="login-card" style="max-width:400px;">
+            <div style="font-size:50px; margin-bottom:16px;">⏳</div>
+            <h1 style="color:var(--orange); font-family:'Playfair Display',serif; margin-bottom:8px;">Solicitud Pendiente</h1>
+            <p style="color:var(--slate); font-size:13px; margin-bottom:20px;">Tu solicitud está pendiente de aprobación. Por favor intenta más tarde.</p>
+            <button onclick="doSignOut()" style="width:100%; padding:12px; border-radius:10px; background:none; border:1px solid rgba(255,255,255,0.15); color:var(--slate); font-size:13px; cursor:pointer;">Salir</button>
+        </div>
+    </div>
+
+    <!-- REVOKED OVERLAY -->
+    <div id="revoked-overlay" style="display:none; position:fixed; inset:0; background:radial-gradient(circle at top right,#1e293b,#0f172a); z-index:10001; align-items:center; justify-content:center; flex-direction:column; padding:20px;">
+        <div class="login-card" style="max-width:400px;">
+            <div style="font-size:50px; margin-bottom:16px;">🚫</div>
+            <h1 style="color:var(--red); font-family:'Playfair Display',serif; margin-bottom:8px;">Acceso Revocado</h1>
+            <p style="color:var(--slate); font-size:13px; margin-bottom:20px;">Tu acceso al sistema ha sido revocado. Contacta al administrador si crees que es un error.</p>
+            <button onclick="doSignOut()" style="width:100%; padding:12px; border-radius:10px; background:none; border:1px solid rgba(255,255,255,0.15); color:var(--slate); font-size:13px; cursor:pointer;">Salir</button>
+        </div>
+    </div>
+
+    <!-- APPROVE MODAL -->
+    <div class="modal-overlay" id="approve-modal">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeApproveModal()">&times;</button>
+            <h2><i class="fa fa-user-check"></i> Aprobar Solicitud</h2>
+            <div id="approve-modal-content" style="display:flex; flex-direction:column; gap:16px; margin-bottom:20px;"></div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-green" id="approve-confirm-btn" onclick="confirmApproval()">
+                    <i class="fa fa-check"></i> Aprobar y Asignar
+                </button>
+                <button class="btn btn-sm" onclick="closeApproveModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RECL DETAIL MODAL -->
+    <div class="modal-overlay" id="recl-detail-modal">
+        <div class="modal-box" style="max-width:480px;">
+            <button class="modal-close" onclick="closeReclDetail()">&times;</button>
+            <h2 style="font-family:'Playfair Display',serif; color:var(--green); margin-top:0; font-size:20px;">
+                <i class="fa fa-user-plus"></i> Reclutamiento
+            </h2>
+            <div id="recl-detail-header" style="font-size:12px; color:var(--slate); margin-bottom:16px;"></div>
+            <div id="recl-detail-content" style="display:flex; flex-direction:column; gap:12px; font-size:14px; line-height:1.6;"></div>
+            <button class="btn btn-sm" style="margin-top:20px; width:100%;" onclick="closeReclDetail()">Cerrar</button>
+        </div>
     </div>
 
     <!-- CONFIG MODAL -->
@@ -1107,6 +1413,17 @@
         </div>
     </div>
 
+    <!-- BITÁCORA LOG MODAL -->
+    <div class="modal-overlay" id="modal-bit-log">
+        <div class="modal-box" style="max-width:600px;">
+            <button class="modal-close" onclick="document.getElementById('modal-bit-log').classList.remove('open')">&times;</button>
+            <h2><i class="fa fa-clock-rotate-left"></i> Log de Transacciones (Bitácora)</h2>
+            <div id="bit-history-grid" style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;">
+                <div class="empty-state"><i class="fa fa-inbox"></i> No hay entradas.</div>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         // --- FIREBASE CONFIG ---
         const firebaseConfig = {
@@ -1121,7 +1438,7 @@
         // --- IMPORT FIREBASE ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, deleteDoc, getDocs, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Initialize
         const app = initializeApp(firebaseConfig);
@@ -1161,17 +1478,90 @@
             if (confirm("¿Cerrar sesión?")) signOut(auth);
         };
 
+        window.doSignOut = function () {
+            signOut(auth).then(() => location.reload());
+        };
+
         onAuthStateChanged(auth, async (u) => {
             if (u) {
                 user = u;
-                document.getElementById('login-overlay').classList.add('hidden');
-                await loadDirectorData();
-                init();
+                const status = await checkDirectorStatus();
+                if (status === 'active') {
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    await loadDirectorData();
+                    startListeningPending();
+                    init();
+                } else if (status === 'inactive') {
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    document.getElementById('revoked-overlay').style.display = 'flex';
+                } else if (status === 'pending') {
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    document.getElementById('pending-overlay').style.display = 'flex';
+                } else {
+                    // New director — can self-register (no approval needed)
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    document.getElementById('register-overlay').style.display = 'flex';
+                    if (u.displayName) document.getElementById('reg-dir-name').value = u.displayName;
+                }
             } else {
                 user = null;
                 document.getElementById('login-overlay').classList.remove('hidden');
+                ['register-overlay', 'pending-overlay', 'revoked-overlay'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
             }
         });
+
+        async function checkDirectorStatus() {
+            if (!user) return 'unknown';
+            const docSnap = await getDoc(doc(db, "directors", user.email));
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.status === 'inactive') return 'inactive';
+                return 'active';
+            }
+            const pendingSnap = await getDoc(doc(db, "pending_users", user.email));
+            if (pendingSnap.exists()) return 'pending';
+            return 'new';
+        }
+
+        const DIR_ACCESS_PASS = 'promessadireccion';
+
+        window.submitDirectorRegistration = async function () {
+            const pass = document.getElementById('reg-dir-pass').value;
+            const errEl = document.getElementById('reg-pass-err');
+            if (pass !== DIR_ACCESS_PASS) {
+                errEl.style.display = 'block';
+                document.getElementById('reg-dir-pass').focus();
+                return;
+            }
+            errEl.style.display = 'none';
+            const name = document.getElementById('reg-dir-name').value.trim();
+            const code = document.getElementById('reg-dir-code').value.trim().toUpperCase();
+            if (!name || !code) { alert('Por favor completa tu nombre y código de director.'); return; }
+            const btn = document.getElementById('reg-dir-btn');
+            btn.disabled = true;
+            btn.textContent = 'Registrando...';
+            try {
+                await setDoc(doc(db, "directors", user.email), {
+                    directorName: name,
+                    directorCode: code,
+                    email: user.email,
+                    status: 'active',
+                    type: 'director',
+                    createdAt: new Date().toISOString()
+                });
+                document.getElementById('register-overlay').style.display = 'none';
+                await loadDirectorData();
+                startListeningPending();
+                init();
+            } catch (err) {
+                alert('Error al registrar: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Crear mi cuenta de Director';
+            }
+        };
 
         // ─── SERVICE WORKER ──────────────────────────────────────────────────────────
         if ('serviceWorker' in navigator) {
@@ -1251,12 +1641,26 @@
                         email: promoterEmail,
                         promoterName: pdata.promoterName || promoterEmail,
                         promotorCode: pdata.promotorCode || '',
-                        coaches: pdata.coaches || []
+                        companyCode: pdata.companyCode || '',
+                        coaches: pdata.coaches || [],
+                        reclutamiento: pdata.reclutamiento || [],
+                        ventaCarrera: pdata.ventaCarrera || []
                     };
                     promoters.push(promoterEntry);
                     promotersMap[promoterEmail] = promoterEntry;
-                    if (pdata.promotorCode) {
+                    // Collect all possible team codes this promoter's coaches might use.
+                    // New registrations use their 4-digit companyCode as promotorCode.
+                    // Old dummy data coaches use the "TEAM-PROMOTOR-{num}" format.
+                    // We include BOTH so coaches loaded with either format are found.
+                    if (pdata.promotorCode && !promotorCodes.includes(pdata.promotorCode)) {
                         promotorCodes.push(pdata.promotorCode);
+                    }
+                    if (pdata.companyCode && !promotorCodes.includes(pdata.companyCode)) {
+                        promotorCodes.push(pdata.companyCode);
+                    }
+                    if (pdata.promotorNum) {
+                        const legacyCode = `TEAM-PROMOTOR-${pdata.promotorNum}`;
+                        if (!promotorCodes.includes(legacyCode)) promotorCodes.push(legacyCode);
                     }
                 });
 
@@ -1270,37 +1674,33 @@
         }
 
         function startListeningCoaches() {
-            // Query all coaches whose promotorTeamCode is in our promotorCodes list
             if (!state.promotorCodes || state.promotorCodes.length === 0) {
-                console.log('No promotorCodes, clearing coaches');
                 state.coaches = [];
                 state.coachesMap = {};
                 startListeningAgents();
                 return;
             }
 
-            console.log('Loading coaches for promotorCodes:', state.promotorCodes);
             const coachQ = query(collection(db, "coaches"), where("promotorTeamCode", "in", state.promotorCodes));
             const unsubCoaches = onSnapshot(coachQ, (snapshot) => {
-                let coaches = [];
+                const coaches = [];
                 const coachesMap = {};
-
                 snapshot.forEach((docSnap) => {
                     const cdata = docSnap.data();
-                    const coachEmail = docSnap.id;
-                    const coachEntry = {
-                        email: coachEmail,
-                        coachName: cdata.coachName || coachEmail,
+                    if (cdata.status === 'inactive') return;
+                    const entry = {
+                        email: docSnap.id,
+                        coachName: cdata.coachName || docSnap.id,
                         agentTeamCode: resolveAgentTeamCode(cdata),
+                        companyCode: cdata.companyCode || '',
                         coachNum: cdata.coachNum,
                         promotorTeamCode: cdata.promotorTeamCode || '',
                         reportes: cdata.reportes || [],
                         reclutamiento: cdata.reclutamiento || []
                     };
-                    coaches.push(coachEntry);
-                    coachesMap[coachEmail] = coachEntry;
+                    coaches.push(entry);
+                    coachesMap[docSnap.id] = entry;
                 });
-
                 state.coaches = coaches;
                 state.coachesMap = coachesMap;
                 startListeningAgents();
@@ -1344,7 +1744,7 @@
                     snapshot.forEach((docSnap) => {
                         const agentData = docSnap.data();
                         if (agentData.agentName) {
-                            batchAgents.push({ name: agentData.agentName, teamCode: agentData.teamCode });
+                            batchAgents.push({ name: agentData.agentName, teamCode: agentData.teamCode, email: docSnap.id, companyCode: agentData.companyCode || '' });
                             if (agentData.entries) {
                                 agentData.entries.forEach(e => {
                                     e.agent = agentData.agentName;
@@ -1482,6 +1882,177 @@
         // ─── INIT ─────────────────────────────────────────────────────────────────────
         window.init = function () {
             refreshAll();
+            initBitacora();
+        }
+
+        // ─── BITÁCORA VIEW (solo lectura) ─────────────────────────────────────────────
+        let bitCurrentWeeks = [];
+
+        function getBitAgentList() { return state.agents.map(a => a.name); }
+        function getBitAgentCoach(name) {
+            // Try agentCoachMap first (populated by startListeningAgentsForCoaches path)
+            if (state.agentCoachMap && state.agentCoachMap[name]) return state.agentCoachMap[name];
+            // Fallback: match via teamCode
+            const agent = state.agents.find(a => a.name === name);
+            if (!agent) return null;
+            const coach = state.coaches.find(c => c.agentTeamCode === agent.teamCode);
+            return coach ? coach.email : null;
+        }
+
+        function refreshBitCoachFilter() {
+            const sel = document.getElementById('bit-coach-filter');
+            if (!sel) return;
+            const prev = sel.value;
+            sel.innerHTML = '<option value="">— Todos los coaches —</option>' +
+                state.coaches.map(c => `<option value="${c.email}">${c.coachName || c.email}</option>`).join('');
+            if (prev) sel.value = prev;
+            refreshBitAgentSelect();
+        }
+
+        window.refreshBitAgentSelect = function () {
+            const coachF = document.getElementById('bit-coach-filter').value;
+            const sel = document.getElementById('bit-agent');
+            const prev = sel.value;
+            const agentNames = getBitAgentList();
+            const agents = coachF
+                ? agentNames.filter(a => getBitAgentCoach(a) === coachF)
+                : agentNames;
+            sel.innerHTML = '<option value="">— Selecciona agente —</option>' +
+                agents.map(a => `<option value="${a}">${a}</option>`).join('');
+            sel.value = agents.includes(prev) ? prev : '';
+            autoLoadBit();
+        };
+
+        window.updateBitCalendar = function () {
+            const month = parseInt(document.getElementById('bit-month').value);
+            const year = parseInt(document.getElementById('bit-year').value);
+            if (!month || !year) return;
+            bitCurrentWeeks = getMonthCalendar(year, month);
+            const sel = document.getElementById('bit-semana');
+            const prev = sel.value;
+            sel.innerHTML = bitCurrentWeeks.map((w, i) => {
+                const f = w[0], l = w[w.length - 1];
+                return `<option value="${i + 1}">Sem ${i + 1} &mdash; ${f.dayName.slice(0, 3)} ${f.date} al ${l.dayName.slice(0, 3)} ${l.date}</option>`;
+            }).join('');
+            sel.value = (prev && parseInt(prev) <= bitCurrentWeeks.length) ? prev : '1';
+            autoLoadBit();
+        };
+
+        window.autoLoadBit = function () {
+            const agent = document.getElementById('bit-agent').value;
+            const semana = document.getElementById('bit-semana').value;
+            const month = parseInt(document.getElementById('bit-month').value);
+            const year = parseInt(document.getElementById('bit-year').value);
+            if (!month || !year) return;
+            const mes = MONTHS_ES[month - 1] + ' ' + year;
+            const semIdx = parseInt(semana) - 1;
+            const weekDays = bitCurrentWeeks[semIdx] || [];
+            buildBitWeekTable(weekDays, agent, mes, semana);
+            const info = document.getElementById('bit-week-info');
+            if (weekDays.length && agent) {
+                info.textContent = `📅 ${mes} · Semana ${semana} de ${bitCurrentWeeks.length} · Días: ${weekDays.map(d => d.dayName + ' ' + d.date).join(', ')}`;
+            } else { info.textContent = ''; }
+            updateBitMonthTotals(agent, mes);
+        };
+
+        function buildBitWeekTable(weekDays, agent, mes, semana) {
+            const tbody = document.getElementById('bit-week-body');
+            if (!weekDays.length || !agent) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--slate);padding:20px;">${agent ? '' : 'Selecciona un agente para ver su bitácora.'}</td></tr>`;
+                resetBitTotals(); return;
+            }
+            const entry = state.entries.find(e => e.agent === agent && e.mes === mes && e.semana == semana);
+            const diasMap = {};
+            if (entry) entry.dias.forEach(d => { diasMap[d.dia] = d; });
+            let semP = 0, semE = 0, semC = 0, semV = 0, semS = 0, semPrima = 0;
+            tbody.innerHTML = weekDays.map(({ dayName, date }) => {
+                const d = diasMap[dayName] || { P: 0, E: 0, C: 0, V: 0, S: 0, prima: 0 };
+                const P = d.P || 0, E = d.E || 0, C = d.C || 0, V = d.V || 0, S = d.S || 0, pr = parseFloat(d.prima) || 0;
+                semP += P; semE += E; semC += C; semV += V; semS += S; semPrima += pr;
+                const funnel = P >= E && E >= C && C >= V ? (P > 0 ? '🟢' : '⚪') : '🔴';
+                return `<tr>
+                  <td class="day-label">${dayName} <span style="font-size:10px;color:var(--slate);">${date}</span></td>
+                  <td style="text-align:center;">${P}</td><td style="text-align:center;">${E}</td>
+                  <td style="text-align:center;">${C}</td><td style="text-align:center;">${V}</td>
+                  <td style="text-align:center;">${S}</td>
+                  <td style="text-align:center;">$${pr.toFixed(0)}</td>
+                  <td style="text-align:center;font-size:16px;">${funnel}</td>
+                </tr>`;
+            }).join('');
+            document.getElementById('bit-tt-P').textContent = semP;
+            document.getElementById('bit-tt-E').textContent = semE;
+            document.getElementById('bit-tt-C').textContent = semC;
+            document.getElementById('bit-tt-V').textContent = semV;
+            document.getElementById('bit-tt-S').textContent = semS;
+            document.getElementById('bit-tt-$').textContent = '$' + semPrima.toFixed(0);
+        }
+
+        function updateBitMonthTotals(agent, mes) {
+            if (!agent) { resetBitMonthTotals(); return; }
+            const monthEntries = state.entries.filter(e => e.agent === agent && e.mes === mes);
+            let mP = 0, mE = 0, mC = 0, mV = 0, mS = 0, mPrima = 0;
+            monthEntries.forEach(e => {
+                if (e.totales) { mP += e.totales.P || 0; mE += e.totales.E || 0; mC += e.totales.C || 0; mV += e.totales.V || 0; mS += e.totales.S || 0; mPrima += parseFloat(e.totales.prima) || 0; }
+            });
+            document.getElementById('bit-ttm-P').textContent = mP;
+            document.getElementById('bit-ttm-E').textContent = mE;
+            document.getElementById('bit-ttm-C').textContent = mC;
+            document.getElementById('bit-ttm-V').textContent = mV;
+            document.getElementById('bit-ttm-S').textContent = mS;
+            document.getElementById('bit-ttm-$').textContent = '$' + mPrima.toFixed(0);
+        }
+
+        function resetBitTotals() {
+            ['P', 'E', 'C', 'V', 'S'].forEach(c => { document.getElementById(`bit-tt-${c}`).textContent = '0'; });
+            document.getElementById('bit-tt-$').textContent = '$0';
+            resetBitMonthTotals();
+        }
+
+        function resetBitMonthTotals() {
+            ['P', 'E', 'C', 'V', 'S'].forEach(c => { document.getElementById(`bit-ttm-${c}`).textContent = '0'; });
+            document.getElementById('bit-ttm-$').textContent = '$0';
+        }
+
+        window.renderBitHistory = function () {
+            const grid = document.getElementById('bit-history-grid');
+            const coachF = document.getElementById('bit-coach-filter').value;
+            const agentF = document.getElementById('bit-agent').value;
+            let filtered = state.entries;
+            if (coachF) filtered = filtered.filter(e => getBitAgentCoach(e.agent) === coachF);
+            if (agentF) filtered = filtered.filter(e => e.agent === agentF);
+            if (!filtered.length) {
+                grid.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i> No hay entradas.</div>';
+                return;
+            }
+            grid.innerHTML = filtered.map(e => {
+                const origIdx = state.entries.indexOf(e);
+                return `<div class="history-chip" onclick="loadBitEntry(${origIdx})">
+                  <span style="font-weight:700;color:var(--gold)">${e.agent}</span>
+                  <span style="color:var(--slate)">${e.mes} · Sem ${e.semana}</span>
+                  <span style="color:var(--teal);font-size:11px;">P:${e.totales?.P||0} E:${e.totales?.E||0} V:${e.totales?.V||0}</span>
+                </div>`;
+            }).join('');
+        };
+
+        window.loadBitEntry = function (i) {
+            const e = state.entries[i];
+            if (!e) return;
+            document.getElementById('bit-agent').value = e.agent;
+            const parts = e.mes.split(' ');
+            const mIdx = MONTHS_ES.indexOf(parts[0]);
+            if (mIdx >= 0) {
+                document.getElementById('bit-month').value = mIdx + 1;
+                document.getElementById('bit-year').value = parseInt(parts[1]) || new Date().getFullYear();
+                updateBitCalendar();
+            }
+            document.getElementById('bit-semana').value = e.semana;
+            autoLoadBit();
+            document.getElementById('modal-bit-log').classList.remove('open');
+        };
+
+        function initBitacora() {
+            updateBitCalendar();
+            refreshBitCoachFilter();
         }
 
         window.saveState = async function () {
@@ -1498,6 +2069,8 @@
             renderKPIs();
             refreshMonthFilters();
             renderCoachReportes();
+            if (document.getElementById('tab-gestion')?.classList.contains('active')) renderGestion();
+            refreshBitCoachFilter();
         }
 
         // ─── TABS ─────────────────────────────────────────────────────────────────────
@@ -1510,6 +2083,8 @@
             if (name === 'kpis') renderKPIs();
             if (name === 'leaderboard') renderLeaderboard();
             if (name === 'reporte') renderCoachReportes();
+            if (name === 'reporte-promotores') { refreshPromoterReclFilters(); renderPromoterReclSection(); }
+            if (name === 'gestion') renderGestion();
         }
 
         // ─── CONFIG ──────────────────────────────────────────────────────────────────
@@ -2336,17 +2911,174 @@
             if (cur && meses.includes(cur)) sel.value = cur;
         }
 
-        function renderCoachReportes() {
+        const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+        window.switchReporteSub = function(sub) {
+            document.getElementById('rpt-section-ventas').style.display = sub === 'ventas' ? '' : 'none';
+            document.getElementById('rpt-section-reclutamiento').style.display = sub === 'reclutamiento' ? '' : 'none';
+            const btnV = document.getElementById('rpt-sub-btn-ventas');
+            const btnR = document.getElementById('rpt-sub-btn-reclutamiento');
+            if (btnV) { btnV.style.background = sub === 'ventas' ? 'var(--gold)' : 'rgba(255,255,255,0.08)'; btnV.style.color = sub === 'ventas' ? '#000' : 'var(--white)'; }
+            if (btnR) { btnR.style.background = sub === 'reclutamiento' ? 'var(--green)' : 'rgba(255,255,255,0.08)'; btnR.style.color = sub === 'reclutamiento' ? '#000' : 'var(--white)'; }
+            if (sub === 'reclutamiento') { refreshReclFilters(); renderReclutamientoSection(); }
+        };
+
+        window.closeReclDetail = function() {
+            document.getElementById('recl-detail-modal').classList.remove('open');
+        };
+
+        window.showReclDetail = function(coachName, mes, reclJson) {
+            const recl = JSON.parse(decodeURIComponent(reclJson));
+            document.getElementById('recl-detail-header').innerHTML = `<strong style="color:var(--white);">${escapeHtml(coachName)}</strong> · ${escapeHtml(mes)}`;
+            document.getElementById('recl-detail-content').innerHTML = `
+                <div style="padding:12px; background:rgba(16,185,129,0.09); border-left:3px solid var(--green); border-radius:6px;">
+                    <div style="font-weight:700; color:var(--green); margin-bottom:4px;"><i class="fa fa-circle-check"></i> ¿Tiene prospectos en entrenamiento?</div>
+                    <div>Sí</div>
+                </div>
+                <div style="padding:12px; background:rgba(255,255,255,0.04); border-left:3px solid var(--gold); border-radius:6px;">
+                    <div style="font-weight:700; color:var(--gold); margin-bottom:4px;"><i class="fa fa-users"></i> Número de prospectos a cargo</div>
+                    <div>${escapeHtml(recl.q2 || '—')}</div>
+                </div>
+                <div style="padding:12px; background:rgba(255,255,255,0.04); border-left:3px solid var(--blue); border-radius:6px;">
+                    <div style="font-weight:700; color:var(--blue); margin-bottom:4px;"><i class="fa fa-id-card"></i> Nombres de prospectos</div>
+                    <div style="white-space:pre-wrap;">${escapeHtml(recl.q3 || '—')}</div>
+                </div>
+                <div style="padding:12px; background:rgba(255,255,255,0.04); border-left:3px solid var(--teal); border-radius:6px;">
+                    <div style="font-weight:700; color:var(--teal); margin-bottom:4px;"><i class="fa fa-handshake"></i> Compromiso de formalización</div>
+                    <div style="white-space:pre-wrap;">${escapeHtml(recl.q4 || '—')}</div>
+                </div>
+            `;
+            document.getElementById('recl-detail-modal').classList.add('open');
+        };
+
+        function refreshReclFilters() {
+            // Year filter — built from actual data
+            const yearSel = document.getElementById('recl-year-filter');
+            if (yearSel) {
+                const years = new Set();
+                state.coaches.forEach(c => (c.reclutamiento||[]).forEach(r => {
+                    if (r.mes) { const y = r.mes.split(' ')[1]; if (y) years.add(y); }
+                }));
+                const sorted = [...years].sort().reverse();
+                const cur = yearSel.value;
+                yearSel.innerHTML = '<option value="">Todos los años</option>' +
+                    sorted.map(y => `<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
+                if (!cur && sorted.length) yearSel.value = sorted[0];
+            }
+            // Promotor filter
+            const promSel = document.getElementById('recl-promotor-filter');
+            if (promSel) {
+                const cur = promSel.value;
+                promSel.innerHTML = '<option value="">Todos los promotores</option>' +
+                    state.promoters.slice().sort((a,b)=>(a.promoterName||'').localeCompare(b.promoterName||''))
+                    .map(p => `<option value="${escapeHtml(p.email)}" ${p.email===cur?'selected':''}>${escapeHtml(p.promoterName)}</option>`).join('');
+            }
+            refreshReclCoachFilter();
+        }
+
+        window.refreshReclCoachFilter = function() {
+            const promF = document.getElementById('recl-promotor-filter')?.value || '';
+            const coachSel = document.getElementById('recl-coach-filter');
+            if (!coachSel) return;
+            let coaches = state.coaches.slice().sort((a,b)=>(a.coachName||'').localeCompare(b.coachName||''));
+            if (promF) {
+                const promoter = state.promotersMap[promF];
+                if (promoter) coaches = coaches.filter(c =>
+                    c.promotorTeamCode === promoter.promotorCode || c.promotorTeamCode === promoter.companyCode
+                );
+            }
+            const cur = coachSel.value;
+            coachSel.innerHTML = '<option value="">Todos los coaches</option>' +
+                coaches.map(c => `<option value="${escapeHtml(c.email)}" ${c.email===cur?'selected':''}>${escapeHtml(c.coachName)}</option>`).join('');
+        };
+
+        function makeMonthBoxes(coach, reclMap, mesesFull) {
+            return mesesFull.map((mesFull, i) => {
+                const recl = reclMap[mesFull];
+                const abrev = MESES_ABREV[i];
+                let bg='rgba(255,255,255,0.06)', icon='·', color='rgba(255,255,255,0.15)', border='rgba(255,255,255,0.08)', cursor='default', clickable=false;
+                if (recl) {
+                    if (recl.q1==='si') { bg='rgba(16,185,129,0.25)'; icon='✓'; color='var(--green)'; border='var(--green)'; clickable=true; cursor='pointer'; }
+                    else if (recl.q1==='no') { bg='rgba(239,68,68,0.25)'; icon='✗'; color='var(--red)'; border='var(--red)'; }
+                }
+                const clickAttr = clickable ? `onclick="showReclDetail('${escapeHtml(coach.coachName)}','${mesFull}','${encodeURIComponent(JSON.stringify(recl))}')" title="Ver detalles"` : '';
+                return `<div ${clickAttr} style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;background:${bg};border:1px solid ${border};border-radius:8px;cursor:${cursor};min-height:62px;" ${clickable?'onmouseover="this.style.opacity=\'0.8\'"onmouseout="this.style.opacity=\'1\'"':''}>
+                    <div style="font-size:10px;font-weight:700;color:var(--slate);">${abrev}</div>
+                    <div style="font-size:18px;font-weight:800;color:${color};">${icon}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderReclutamientoSection() {
+            const container = document.getElementById('reclutamiento-grid');
+            if (!container) return;
+
+            const promF  = document.getElementById('recl-promotor-filter')?.value || '';
+            const coachF = document.getElementById('recl-coach-filter')?.value  || '';
+            const yearF  = document.getElementById('recl-year-filter')?.value   || '';
+
+            let coachesToShow = state.coaches.slice().sort((a,b)=>(a.coachName||'').localeCompare(b.coachName||''));
+            if (promF) {
+                const promoter = state.promotersMap[promF];
+                if (promoter) coachesToShow = coachesToShow.filter(c =>
+                    c.promotorTeamCode === promoter.promotorCode || c.promotorTeamCode === promoter.companyCode
+                );
+            }
+            if (coachF) coachesToShow = coachesToShow.filter(c => c.email === coachF);
+
+            if (!coachesToShow.length) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay coaches con los filtros actuales.</div>';
+                return;
+            }
+
+            const html = coachesToShow.map(coach => {
+                const reclMap = {};
+                (coach.reclutamiento||[]).forEach(r => { if (r.mes) reclMap[r.mes] = r; });
+
+                const allYears = [...new Set(Object.keys(reclMap).map(m => m.split(' ')[1]).filter(Boolean))].sort().reverse();
+                const yearsToShow = yearF ? (allYears.includes(yearF) ? [yearF] : []) : allYears;
+                if (!yearsToShow.length) return '';
+
+                const yearBlocks = yearsToShow.map(year => {
+                    const mesesFull = MONTHS_ES.map(m => `${m} ${year}`);
+                    const siCount = mesesFull.filter(m => reclMap[m]?.q1==='si').length;
+                    const noCount = mesesFull.filter(m => reclMap[m]?.q1==='no').length;
+                    const pending = 12 - siCount - noCount;
+                    return `
+                    <div style="margin-bottom:${yearsToShow.length>1?'18px':'0'};">
+                        ${yearsToShow.length>1?`<div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px;letter-spacing:1px;">${year}</div>`:''}
+                        <div style="display:flex;gap:10px;font-size:12px;margin-bottom:8px;">
+                            <span style="color:var(--green);font-weight:700;"><i class="fa fa-circle-check"></i> ${siCount} Sí</span>
+                            <span style="color:var(--red);font-weight:700;"><i class="fa fa-circle-xmark"></i> ${noCount} No</span>
+                            ${pending>0?`<span style="color:var(--slate);">${pending} pendientes</span>`:''}
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:5px;">${makeMonthBoxes(coach,reclMap,mesesFull)}</div>
+                    </div>`;
+                }).join('');
+
+                return `
+                <div style="background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">
+                    <div style="margin-bottom:14px;">
+                        <div style="font-weight:700;font-size:15px;color:var(--white);"><i class="fa fa-user-tie" style="color:var(--gold);margin-right:6px;"></i>${escapeHtml(coach.coachName)}</div>
+                        <div style="font-size:11px;color:var(--slate);">${escapeHtml(coach.email)}</div>
+                    </div>
+                    ${yearBlocks}
+                </div>`;
+            }).filter(Boolean).join('');
+
+            container.innerHTML = html || '<div class="empty-state"><i class="fa fa-inbox"></i>No hay datos de reclutamiento con los filtros actuales.</div>';
+        }
+
+        function renderVentasSection() {
             const container = document.getElementById('coach-reportes-list');
             if (!container) return;
 
             refreshCoachReporteMonthFilter();
 
-            const promF = document.getElementById('rpt-promotor-filter') ? document.getElementById('rpt-promotor-filter').value : '';
-            const coachF = document.getElementById('rpt-coach-filter') ? document.getElementById('rpt-coach-filter').value : '';
-            const mesF = document.getElementById('rpt-mes-filter') ? document.getElementById('rpt-mes-filter').value : '';
+            const promF = document.getElementById('rpt-promotor-filter')?.value || '';
+            const coachF = document.getElementById('rpt-coach-filter')?.value || '';
+            const mesF = document.getElementById('rpt-mes-filter')?.value || '';
 
-            // Build list of coaches to display — filter by promotor then by coach
             let coachesToShow = state.coaches.slice();
             if (promF) {
                 const promoter = state.promotersMap[promF];
@@ -2355,132 +3087,798 @@
             if (coachF) {
                 coachesToShow = coachesToShow.filter(c => c.email === coachF);
             }
-            coachesToShow.sort((a, b) => (a.coachName || '').localeCompare(b.coachName || ''));
+            coachesToShow.sort((a, b) => (a.coachName||'').localeCompare(b.coachName||''));
 
             if (!coachesToShow.length) {
                 container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay coaches en tu equipo todavía.</div>';
                 return;
             }
 
-            // For each coach, gather reportes by month (combined with reclutamiento)
             const allBlocks = [];
-
             coachesToShow.forEach(coach => {
                 const reportes = coach.reportes || [];
-                const reclutamiento = coach.reclutamiento || [];
-
-                // Get unique meses for this coach
                 const mesesSet = new Set();
                 reportes.forEach(r => { if (r.mes) mesesSet.add(r.mes); });
-                reclutamiento.forEach(r => { if (r.mes) mesesSet.add(r.mes); });
                 let meses = [...mesesSet];
-
                 if (mesF) meses = meses.filter(m => m === mesF);
-
-                // Sort newest first
                 meses.sort((a, b) => {
-                    const pa = a.split(' '); const pb = b.split(' ');
-                    const mA = MONTHS_ES.indexOf(pa[0]) + 1; const mB = MONTHS_ES.indexOf(pb[0]) + 1;
-                    const yA = parseInt(pa[1]) || 0; const yB = parseInt(pb[1]) || 0;
+                    const pa = a.split(' '), pb = b.split(' ');
+                    const mA = MONTHS_ES.indexOf(pa[0])+1, mB = MONTHS_ES.indexOf(pb[0])+1;
+                    const yA = parseInt(pa[1])||0, yB = parseInt(pb[1])||0;
                     if (yA !== yB) return yB - yA;
                     return mB - mA;
                 });
-
                 meses.forEach(mes => {
                     const rpt = reportes.find(r => r.mes === mes);
-                    const recl = reclutamiento.find(r => r.mes === mes);
-                    allBlocks.push({
-                        coachName: coach.coachName,
-                        coachEmail: coach.email,
-                        mes,
-                        rpt,
-                        recl
-                    });
+                    if (rpt) allBlocks.push({ coachName: coach.coachName, coachEmail: coach.email, mes, rpt });
                 });
             });
 
             if (!allBlocks.length) {
-                container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay reportes de coaches con los filtros actuales.</div>';
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay reportes de ventas con los filtros actuales.</div>';
                 return;
             }
 
-            // Sort all blocks: newest first, then by coach name
             allBlocks.sort((a, b) => {
-                const pa = a.mes.split(' '); const pb = b.mes.split(' ');
-                const mA = MONTHS_ES.indexOf(pa[0]) + 1; const mB = MONTHS_ES.indexOf(pb[0]) + 1;
-                const yA = parseInt(pa[1]) || 0; const yB = parseInt(pb[1]) || 0;
+                const pa = a.mes.split(' '), pb = b.mes.split(' ');
+                const mA = MONTHS_ES.indexOf(pa[0])+1, mB = MONTHS_ES.indexOf(pb[0])+1;
+                const yA = parseInt(pa[1])||0, yB = parseInt(pb[1])||0;
                 if (yA !== yB) return yB - yA;
                 if (mA !== mB) return mB - mA;
-                return (a.coachName || '').localeCompare(b.coachName || '');
+                return (a.coachName||'').localeCompare(b.coachName||'');
             });
 
             container.innerHTML = allBlocks.map(blk => {
                 const rpt = blk.rpt;
-                const recl = blk.recl;
-
-                let reclutamientoHtml = '';
-                if (recl) {
-                    if (recl.q1 === 'si') {
-                        reclutamientoHtml = `
-                            <div><strong style="color:var(--gold);">Prospectos a cargo (Q2):</strong> ${escapeHtml(recl.q2 || '0')}</div>
-                            <div><strong style="color:var(--gold);">Nombres (Q3):</strong> ${escapeHtml(recl.q3 || '—')}</div>
-                            <div><strong style="color:var(--gold);">Compromiso de formalización (Q4):</strong> ${escapeHtml(recl.q4 || '—')}</div>
-                        `;
-                    } else {
-                        reclutamientoHtml = `<div style="color:var(--slate);">No tiene prospectos en entrenamiento actualmente.</div>`;
-                    }
-                } else {
-                    reclutamientoHtml = `<div style="color:var(--slate);">Sin datos de reclutamiento.</div>`;
-                }
-
-                const fechaStr = rpt && rpt.fecha ? new Date(rpt.fecha).toLocaleDateString('es-MX') : '';
-
+                const fechaStr = rpt.fecha ? new Date(rpt.fecha).toLocaleDateString('es-MX') : '';
                 return `
-                <div style="background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+                <div style="background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:20px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
                         <div>
-                            <div style="font-family:'Playfair Display', serif; font-size:20px; color:var(--gold); font-weight:700;">
-                                <i class="fa fa-user-tie"></i> ${escapeHtml(blk.coachName)}
-                            </div>
-                            <div style="font-size:11px; color:var(--slate);">${escapeHtml(blk.coachEmail)}</div>
+                            <div style="font-family:'Playfair Display',serif;font-size:20px;color:var(--gold);font-weight:700;"><i class="fa fa-user-tie"></i> ${escapeHtml(blk.coachName)}</div>
+                            <div style="font-size:11px;color:var(--slate);">${escapeHtml(blk.coachEmail)}</div>
                         </div>
                         <div style="text-align:right;">
-                            <div style="font-weight:700; color:var(--white); font-size:14px;">${escapeHtml(blk.mes)}</div>
-                            ${fechaStr ? `<div style="font-size:10px; color:var(--slate);">Enviado: ${fechaStr}</div>` : ''}
+                            <div style="font-weight:700;color:var(--white);font-size:14px;">${escapeHtml(blk.mes)}</div>
+                            ${fechaStr ? `<div style="font-size:10px;color:var(--slate);">Enviado: ${fechaStr}</div>` : ''}
                         </div>
                     </div>
-
-                    ${rpt ? `
-                    <div style="display:grid; gap:14px; font-size:13px; line-height:1.55;">
-                        <div style="padding:12px; background:rgba(59,130,246,0.08); border-left:3px solid var(--blue); border-radius:6px;">
-                            <div style="font-weight:700; color:var(--blue); margin-bottom:6px;"><i class="fa fa-chart-line"></i> Análisis general del mes</div>
-                            <div style="white-space:pre-wrap;">${escapeHtml(rpt.analisis || '—')}</div>
+                    <div style="display:grid;gap:14px;font-size:13px;line-height:1.55;">
+                        <div style="padding:12px;background:rgba(59,130,246,0.08);border-left:3px solid var(--blue);border-radius:6px;">
+                            <div style="font-weight:700;color:var(--blue);margin-bottom:6px;"><i class="fa fa-chart-line"></i> Análisis general del mes</div>
+                            <div style="white-space:pre-wrap;">${escapeHtml(rpt.analisis||'—')}</div>
                         </div>
-                        <div style="padding:12px; background:rgba(239,68,68,0.08); border-left:3px solid var(--red); border-radius:6px;">
-                            <div style="font-weight:700; color:var(--red); margin-bottom:6px;"><i class="fa fa-triangle-exclamation"></i> Sospecha de fraude en actividad</div>
-                            <div style="white-space:pre-wrap;">${escapeHtml(rpt.agentes || '—')}</div>
+                        <div style="padding:12px;background:rgba(239,68,68,0.08);border-left:3px solid var(--red);border-radius:6px;">
+                            <div style="font-weight:700;color:var(--red);margin-bottom:6px;"><i class="fa fa-triangle-exclamation"></i> Sospecha de fraude en actividad</div>
+                            <div style="white-space:pre-wrap;">${escapeHtml(rpt.agentes||'—')}</div>
                         </div>
-                        <div style="padding:12px; background:rgba(16,185,129,0.08); border-left:3px solid var(--green); border-radius:6px;">
-                            <div style="font-weight:700; color:var(--green); margin-bottom:6px;"><i class="fa fa-handshake"></i> Compromisos del coach</div>
-                            <div style="white-space:pre-wrap;">${escapeHtml(rpt.compromisos || '—')}</div>
+                        <div style="padding:12px;background:rgba(16,185,129,0.08);border-left:3px solid var(--green);border-radius:6px;">
+                            <div style="font-weight:700;color:var(--green);margin-bottom:6px;"><i class="fa fa-handshake"></i> Compromisos del coach</div>
+                            <div style="white-space:pre-wrap;">${escapeHtml(rpt.compromisos||'—')}</div>
                         </div>
                         ${rpt.notas ? `
-                        <div style="padding:12px; background:rgba(148,163,184,0.08); border-left:3px solid var(--slate); border-radius:6px;">
-                            <div style="font-weight:700; color:var(--slate); margin-bottom:6px;"><i class="fa fa-note-sticky"></i> Notas adicionales</div>
+                        <div style="padding:12px;background:rgba(148,163,184,0.08);border-left:3px solid var(--slate);border-radius:6px;">
+                            <div style="font-weight:700;color:var(--slate);margin-bottom:6px;"><i class="fa fa-note-sticky"></i> Notas adicionales</div>
                             <div style="white-space:pre-wrap;">${escapeHtml(rpt.notas)}</div>
-                        </div>
-                        ` : ''}
+                        </div>` : ''}
                     </div>
-                    ` : `<div style="color:var(--slate); font-style:italic; padding:10px 0;">Este coach no ha enviado reporte de ventas para ${escapeHtml(blk.mes)}.</div>`}
-
-                    <div style="margin-top:14px; padding:12px; background:rgba(212,175,55,0.08); border-left:3px solid var(--gold); border-radius:6px; font-size:13px; line-height:1.55;">
-                        <div style="font-weight:700; color:var(--gold); margin-bottom:8px;"><i class="fa fa-user-plus"></i> Reclutamiento</div>
-                        ${reclutamientoHtml}
-                    </div>
-                </div>
-                `;
+                </div>`;
             }).join('');
         }
+
+        function renderCoachReportes() {
+            renderVentasSection();
+            // If reclutamiento section is visible, refresh it too
+            if (document.getElementById('rpt-section-reclutamiento')?.style.display !== 'none') {
+                renderReclutamientoSection();
+            }
+        }
+
+        // ─── GESTIÓN DE EQUIPO ───────────────────────────────────────────────────────
+        let pendingUsers = [];
+        let currentApproval = null;
+
+        function startListeningPending() {
+            const pendQ = collection(db, "pending_users");
+            const unsubPending = onSnapshot(pendQ, (snapshot) => {
+                pendingUsers = [];
+                snapshot.forEach(docSnap => {
+                    pendingUsers.push({ email: docSnap.id, ...docSnap.data() });
+                });
+                // Update badge
+                const badge = document.getElementById('pending-badge');
+                if (badge) {
+                    if (pendingUsers.length > 0) {
+                        badge.textContent = pendingUsers.length;
+                        badge.style.display = 'inline';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+                if (document.getElementById('tab-gestion')?.classList.contains('active')) renderGestion();
+            });
+            unsubListeners.push(unsubPending);
+        }
+
+        function renderGestion() {
+            renderPendingList();
+            renderGestionAll();
+        }
+
+        function renderPendingList() {
+            const container = document.getElementById('pending-list');
+            if (!container) return;
+            if (!pendingUsers.length) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay solicitudes pendientes.</div>';
+                return;
+            }
+            container.innerHTML = pendingUsers.map(u => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:rgba(255,255,255,0.04); border-radius:8px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.08); flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <div style="font-weight:600; font-size:13px;">${escapeHtml(u.name || u.email)}</div>
+                        <div style="font-size:11px; color:var(--slate); margin-top:2px;">${escapeHtml(u.email)}</div>
+                        <div style="font-size:12px; margin-top:4px;">Clave: <span style="font-size:16px; font-weight:800; color:var(--gold); letter-spacing:3px;">${escapeHtml(u.companyCode || '—')}</span></div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-green btn-sm" onclick="openApproveModal('${escapeHtml(u.email)}')">
+                            <i class="fa fa-check"></i> Aprobar
+                        </button>
+                        <button class="btn btn-red btn-sm" onclick="rejectUser('${escapeHtml(u.email)}')">
+                            <i class="fa fa-times"></i> Rechazar
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderGestionAll() {
+            const container = document.getElementById('gestion-all-list');
+            if (!container) return;
+
+            const search = (document.getElementById('gestion-search')?.value || '').toLowerCase();
+            const roleFilter = document.getElementById('gestion-role-filter')?.value || '';
+
+            // Build unified list (active members only)
+            const all = [];
+
+            state.promoters.forEach(p => {
+                if (p.status === 'inactive') return;
+                all.push({
+                    role: 'promoter',
+                    name: p.promoterName || '',
+                    email: p.email,
+                    companyCode: p.companyCode || p.promotorCode || '',
+                    assignCode: p.directorCode || state.directorCode || ''
+                });
+            });
+
+            state.coaches.forEach(c => {
+                if (c.status === 'inactive') return;
+                all.push({
+                    role: 'coach',
+                    name: c.coachName || '',
+                    email: c.email,
+                    companyCode: c.companyCode || c.agentTeamCode || '',
+                    assignCode: c.promotorTeamCode || ''
+                });
+            });
+
+            const sortedAgents = [...state.agents].sort((a, b) => a.name.localeCompare(b.name));
+            sortedAgents.forEach(a => {
+                if (a.status === 'inactive') return;
+                all.push({
+                    role: 'agent',
+                    name: a.name || '',
+                    email: a.email || '',
+                    companyCode: a.companyCode || '',
+                    assignCode: a.teamCode || ''
+                });
+            });
+
+            // Apply filters
+            let filtered = all;
+            if (roleFilter) filtered = filtered.filter(m => m.role === roleFilter);
+            if (search) filtered = filtered.filter(m =>
+                m.name.toLowerCase().includes(search) ||
+                m.email.toLowerCase().includes(search) ||
+                m.companyCode.toLowerCase().includes(search)
+            );
+
+            if (!filtered.length) {
+                container.innerHTML = '<div class="empty-state" style="padding:20px 0;"><i class="fa fa-users"></i> No hay miembros que coincidan.</div>';
+                return;
+            }
+
+            const assignLabelFor = { promoter: 'Cód. Director', coach: 'Cód. Promotor', agent: 'Cód. Coach' };
+            const roleBadgeColor = { promoter: 'var(--gold)', coach: 'var(--teal)', agent: 'var(--blue)' };
+
+            container.innerHTML = filtered.map(m => {
+                const safeEmail = escapeHtml(m.email);
+                const eid = m.email.replace(/[@.+]/g, '_');
+                return `
+                <div style="display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.02); border-radius:8px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+                            <input id="name-inp-${eid}" value="${escapeHtml(m.name)}" placeholder="Nombre" style="font-weight:600; font-size:13px; width:190px; padding:5px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:var(--white);">
+                            <span style="font-size:11px; color:var(--slate);">${safeEmail}</span>
+                            <span style="font-size:11px; display:flex; align-items:center; gap:4px;">
+                                🔑 <input id="code-inp-${eid}" value="${escapeHtml(m.companyCode)}" placeholder="0000" maxlength="4" style="width:72px; font-weight:800; color:var(--gold); font-size:13px; letter-spacing:2px; padding:4px 8px; text-align:center; background:rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.25); border-radius:6px;">
+                            </span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <select id="role-sel-${eid}" onchange="updateAssignLabel('${safeEmail}')" style="font-size:12px; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:var(--white); font-weight:600;">
+                                <option value="promoter" ${m.role === 'promoter' ? 'selected' : ''} style="background:#1e293b;">📊 Promotor</option>
+                                <option value="coach" ${m.role === 'coach' ? 'selected' : ''} style="background:#1e293b;">🧑‍🏫 Coach</option>
+                                <option value="agent" ${m.role === 'agent' ? 'selected' : ''} style="background:#1e293b;">👤 Agente</option>
+                            </select>
+                            <span id="assign-lbl-${eid}" style="font-size:11px; color:var(--slate); white-space:nowrap;">${escapeHtml(assignLabelFor[m.role])}:</span>
+                            <input id="assign-inp-${eid}" value="${escapeHtml(m.assignCode)}" placeholder="clave-4-digitos" style="width:130px; font-size:12px; padding:4px 8px; color:var(--teal); background:rgba(6,182,212,0.06); border:1px solid rgba(6,182,212,0.2); border-radius:6px;">
+                        </div>
+                    </div>
+                    <button class="btn btn-green btn-sm" onclick="saveMemberChanges('${safeEmail}','${m.role}')">
+                        <i class="fa fa-save"></i> Guardar
+                    </button>
+                    <button class="btn btn-red btn-sm" onclick="expelMember('${safeEmail}','${m.role}')">
+                        <i class="fa fa-user-minus"></i> Expulsar
+                    </button>
+                </div>`;
+            }).join('');
+        }
+
+        window.updateAssignLabel = function (email) {
+            const eid = email.replace(/[@.+]/g, '_');
+            const role = document.getElementById('role-sel-' + eid)?.value;
+            const lblEl = document.getElementById('assign-lbl-' + eid);
+            const inpEl = document.getElementById('assign-inp-' + eid);
+            if (!lblEl || !inpEl) return;
+            const labels = { promoter: 'Cód. Director', coach: 'Cód. Promotor', agent: 'Cód. Coach' };
+            lblEl.textContent = (labels[role] || 'Asignado a') + ':';
+            // Pre-fill sensible default when role changes
+            if (role === 'promoter') { inpEl.value = state.directorCode || ''; inpEl.style.color = 'var(--gold)'; }
+            else if (role === 'coach') { inpEl.value = ''; inpEl.style.color = 'var(--teal)'; }
+            else if (role === 'agent') { inpEl.value = ''; inpEl.style.color = 'var(--blue)'; }
+        };
+
+        window.saveMemberChanges = async function (email, originalRole) {
+            const eid = email.replace(/[@.+]/g, '_');
+            const newRole    = document.getElementById('role-sel-'  + eid)?.value;
+            const newName    = (document.getElementById('name-inp-' + eid)?.value || '').trim();
+            const newCode    = (document.getElementById('code-inp-' + eid)?.value || '').trim();
+            const newAssign  = (document.getElementById('assign-inp-'+ eid)?.value || '').trim();
+
+            if (!newName) { alert('El nombre no puede estar vacío.'); return; }
+            if (newCode && !/^\d{4}$/.test(newCode)) { alert('La clave debe ser exactamente 4 dígitos numéricos.'); return; }
+
+            try {
+                if (newRole === originalRole) {
+                    // ── Same role: update fields in place ────────────────────────────────
+                    const colName = { promoter: 'promoters', coach: 'coaches', agent: 'users' }[newRole];
+                    const updates = {};
+                    if (newRole === 'promoter') {
+                        updates.promoterName  = newName;
+                        if (newCode)   { updates.companyCode = newCode; updates.promotorCode = newCode; }
+                        if (newAssign)   updates.directorCode = newAssign;
+                    } else if (newRole === 'coach') {
+                        updates.coachName = newName;
+                        if (newCode)   { updates.companyCode = newCode; updates.teamCode = newCode; }
+                        if (newAssign)   updates.promotorTeamCode = newAssign;
+                    } else {
+                        updates.agentName = newName;
+                        if (newCode)   updates.companyCode = newCode;
+                        if (newAssign)   updates.teamCode = newAssign;
+                    }
+                    await setDoc(doc(db, colName, email), updates, { merge: true });
+                    alert(`✅ Cambios guardados para ${newName}.`);
+
+                } else {
+                    // ── Role changed: migrate ─────────────────────────────────────────
+                    const roleLabels = { promoter: 'Promotor', coach: 'Coach', agent: 'Agente' };
+                    if (!confirm(`¿Cambiar rol de "${newName}" de ${roleLabels[originalRole]} → ${roleLabels[newRole]}?\n\nSu registro anterior quedará inactivo. Los miembros que le estaban asignados quedan huérfanos — deberás reasignarlos manualmente.`)) return;
+
+                    const colOld = { promoter: 'promoters', coach: 'coaches', agent: 'users' }[originalRole];
+                    const colNew = { promoter: 'promoters', coach: 'coaches', agent: 'users' }[newRole];
+
+                    // Grab old doc for reference
+                    const oldSnap = await getDoc(doc(db, colOld, email));
+                    const oldData = oldSnap.exists() ? oldSnap.data() : {};
+
+                    const finalCode = newCode || oldData.companyCode || '';
+
+                    const newDocData = {
+                        email,
+                        status: 'active',
+                        type: newRole,
+                        companyCode: finalCode,
+                        migratedFrom: originalRole,
+                        migratedAt: new Date().toISOString()
+                    };
+
+                    if (newRole === 'promoter') {
+                        newDocData.promoterName  = newName;
+                        newDocData.promotorCode  = finalCode;
+                        newDocData.directorCode  = newAssign || state.directorCode || '';
+                    } else if (newRole === 'coach') {
+                        newDocData.coachName         = newName;
+                        newDocData.teamCode          = finalCode;   // agents link via this
+                        newDocData.promotorTeamCode  = newAssign || '';
+                    } else {
+                        newDocData.agentName = newName;
+                        newDocData.teamCode  = newAssign || '';     // links to coach's code
+                    }
+
+                    // Write new role doc, deactivate old
+                    await setDoc(doc(db, colNew, email), newDocData, { merge: true });
+                    await setDoc(doc(db, colOld, email), { status: 'inactive' }, { merge: true });
+
+                    alert(`✅ ${newName} migrado a ${roleLabels[newRole]}.\nMiembros anteriores quedan huérfanos — reasígnalos desde esta tabla.`);
+                }
+            } catch (err) {
+                alert('Error al guardar: ' + err.message);
+            }
+        };
+
+        window.expelMember = async function (email, role) {
+            const member = role === 'promoter' ? state.promotersMap[email]
+                         : role === 'coach'    ? state.coachesMap[email]
+                         : state.agents.find(a => a.email === email);
+            const name = member
+                ? (member.promoterName || member.coachName || member.name || email)
+                : email;
+            const roleLabel = { promoter: 'promotor', coach: 'coach', agent: 'agente' }[role] || role;
+            if (!confirm(`¿Expulsar al ${roleLabel} "${name}"?\n\nSu historial de datos se conservará pero perderá acceso al sistema.`)) return;
+            try {
+                const colName = { promoter: 'promoters', coach: 'coaches', agent: 'users' }[role];
+                await setDoc(doc(db, colName, email), { status: 'inactive' }, { merge: true });
+                alert(`✅ ${name} ha sido expulsado. Sus datos se conservan.`);
+            } catch (err) { alert('Error: ' + err.message); }
+        };
+
+        window.openApproveModal = function (email) {
+            const pending = pendingUsers.find(u => u.email === email);
+            if (!pending) return;
+            currentApproval = pending;
+
+            const coachOpts = state.coaches
+                .sort((a, b) => a.coachName.localeCompare(b.coachName))
+                .map(c => `<option value="${escapeHtml(c.email)}">${escapeHtml(c.coachName)} [${escapeHtml(c.companyCode || c.agentTeamCode || c.email)}]</option>`)
+                .join('');
+            const promOpts = state.promoters
+                .sort((a, b) => a.promoterName.localeCompare(b.promoterName))
+                .map(p => `<option value="${escapeHtml(p.email)}">${escapeHtml(p.promoterName)} [${escapeHtml(p.companyCode || p.promotorCode || p.email)}]</option>`)
+                .join('');
+
+            const formHtml = `
+                <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:14px; font-size:13px; line-height:1.9;">
+                    <div><strong style="color:var(--gold);">Nombre:</strong> ${escapeHtml(pending.name || '—')}</div>
+                    <div><strong style="color:var(--gold);">Email:</strong> ${escapeHtml(pending.email)}</div>
+                    <div><strong style="color:var(--gold);">Clave:</strong> <span style="font-size:18px; font-weight:800; letter-spacing:4px;">${escapeHtml(pending.companyCode || '—')}</span></div>
+                </div>
+
+                <div>
+                    <label class="field-label">Asignar como</label>
+                    <select id="approve-role-sel" onchange="updateApprovalFields()" style="font-weight:700;">
+                        <option value="">-- Seleccionar rol --</option>
+                        <option value="agent">👤 Agente</option>
+                        <option value="coach">🧑‍🏫 Coach</option>
+                        <option value="promoter">📊 Promotor</option>
+                    </select>
+                </div>
+
+                <div id="approve-field-agent" style="display:none;">
+                    <label class="field-label">Asignar al equipo del Coach</label>
+                    <select id="approve-coach-sel">
+                        <option value="">-- Seleccionar coach --</option>
+                        ${coachOpts}
+                    </select>
+                </div>
+
+                <div id="approve-field-coach" style="display:none;">
+                    <label class="field-label">Asignar al equipo del Promotor</label>
+                    <select id="approve-promotor-sel">
+                        <option value="">-- Seleccionar promotor --</option>
+                        ${promOpts}
+                    </select>
+                </div>
+
+                <div id="approve-field-promoter" style="display:none; background:rgba(212,175,55,0.1); border:1px solid rgba(212,175,55,0.3); border-radius:8px; padding:12px; font-size:12px; color:var(--gold-l); line-height:1.6;">
+                    <i class="fa fa-circle-info"></i> El promotor quedará vinculado a tu código de director <strong>(${escapeHtml(state.directorCode || '—')})</strong>.
+                    Su clave <strong>${escapeHtml(pending.companyCode || '—')}</strong> será su código de equipo para coaches.
+                </div>`;
+
+            document.getElementById('approve-modal-content').innerHTML = formHtml;
+            document.getElementById('approve-modal').classList.add('open');
+        };
+
+        window.updateApprovalFields = function () {
+            const role = document.getElementById('approve-role-sel')?.value;
+            ['agent', 'coach', 'promoter'].forEach(r => {
+                const el = document.getElementById('approve-field-' + r);
+                if (el) el.style.display = (role === r) ? 'block' : 'none';
+            });
+        };
+
+        window.closeApproveModal = function () {
+            document.getElementById('approve-modal').classList.remove('open');
+            currentApproval = null;
+        };
+
+        window.confirmApproval = async function () {
+            if (!currentApproval) return;
+            const btn = document.getElementById('approve-confirm-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Procesando...';
+
+            try {
+                const { email, name, companyCode } = currentApproval;
+                const role = document.getElementById('approve-role-sel')?.value;
+
+                if (!role) { alert('Por favor selecciona un rol.'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Aprobar y Asignar'; return; }
+                if (!companyCode) { alert('Esta solicitud no tiene clave de agente. Recházala y pide al usuario que se registre de nuevo.'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Aprobar y Asignar'; return; }
+
+                if (role === 'agent') {
+                    const coachEmail = document.getElementById('approve-coach-sel')?.value;
+                    if (!coachEmail) { alert('Por favor selecciona un coach.'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Aprobar y Asignar'; return; }
+                    const coach = state.coachesMap[coachEmail];
+                    if (!coach) { alert('Coach no encontrado.'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Aprobar y Asignar'; return; }
+                    // Agent's teamCode = coach's companyCode (4-digit) — links agent to coach's team
+                    const coachTeamCode = coach.companyCode || coach.agentTeamCode;
+                    await setDoc(doc(db, "users", email), {
+                        agentName: name,
+                        email: email,
+                        companyCode: companyCode,
+                        teamCode: coachTeamCode,
+                        status: 'active',
+                        type: 'agent',
+                        approvedBy: user.email,
+                        approvedAt: new Date().toISOString()
+                    }, { merge: true });
+
+                } else if (role === 'coach') {
+                    const promEmail = document.getElementById('approve-promotor-sel')?.value;
+                    if (!promEmail) { alert('Por favor selecciona un promotor.'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Aprobar y Asignar'; return; }
+                    const promoter = state.promotersMap[promEmail];
+                    if (!promoter) { alert('Promotor no encontrado.'); btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Aprobar y Asignar'; return; }
+                    // Coach's teamCode = their own companyCode — agents will use this to link to them
+                    // Coach's promotorTeamCode = promoter's companyCode — links coach to promoter's team
+                    const promTeamCode = promoter.companyCode || promoter.promotorCode;
+                    await setDoc(doc(db, "coaches", email), {
+                        coachName: name,
+                        email: email,
+                        companyCode: companyCode,
+                        teamCode: companyCode,       // agents link to coach using this
+                        promotorTeamCode: promTeamCode,
+                        directorCode: state.directorCode,   // stored for future direct queries
+                        status: 'active',
+                        type: 'coach',
+                        approvedBy: user.email,
+                        approvedAt: new Date().toISOString()
+                    }, { merge: true });
+
+                } else if (role === 'promoter') {
+                    // Promoter's promotorCode = their own companyCode — coaches will use this to link to them
+                    await setDoc(doc(db, "promoters", email), {
+                        promoterName: name,
+                        email: email,
+                        companyCode: companyCode,
+                        promotorCode: companyCode,   // coaches link to promoter using this
+                        directorCode: state.directorCode,
+                        status: 'active',
+                        type: 'promoter',
+                        approvedBy: user.email,
+                        approvedAt: new Date().toISOString()
+                    }, { merge: true });
+                }
+
+                await deleteDoc(doc(db, "pending_users", email));
+                closeApproveModal();
+                const roleLabel = { agent: 'Agente', coach: 'Coach', promoter: 'Promotor' }[role];
+                alert(`✅ ${escapeHtml(name || email)} aprobado como ${roleLabel} (clave: ${companyCode}).`);
+
+            } catch (err) {
+                alert('Error al aprobar: ' + err.message);
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa fa-check"></i> Aprobar y Asignar';
+        };
+
+        window.rejectUser = async function (email) {
+            const pending = pendingUsers.find(u => u.email === email);
+            const name = pending ? (pending.name || email) : email;
+            if (!confirm(`¿Rechazar la solicitud de ${name}? Esta acción no se puede deshacer.`)) return;
+            try {
+                await deleteDoc(doc(db, "pending_users", email));
+            } catch (err) { alert('Error: ' + err.message); }
+        };
+
+        window.expelAgent = async function (agentEmail) {
+            if (!agentEmail) return;
+            const agent = state.agents.find(a => a.email === agentEmail);
+            const name = agent ? agent.name : agentEmail;
+            if (!confirm(`¿Expulsar al agente "${name}"?\n\nSu historial de datos se conservará pero perderá acceso al sistema.`)) return;
+            try {
+                await setDoc(doc(db, "users", agentEmail), { status: 'inactive' }, { merge: true });
+                alert(`✅ ${name} ha sido expulsado. Sus datos se conservan.`);
+            } catch (err) { alert('Error: ' + err.message); }
+        };
+
+        window.expelCoach = async function (coachEmail) {
+            const coach = state.coachesMap[coachEmail];
+            const name = coach ? coach.coachName : coachEmail;
+            if (!confirm(`¿Expulsar al coach "${name}"?\n\nSus agentes quedarán sin coach. Sus datos se conservan.`)) return;
+            try {
+                await setDoc(doc(db, "coaches", coachEmail), { status: 'inactive' }, { merge: true });
+                alert(`✅ ${name} ha sido expulsado. Sus datos se conservan.`);
+            } catch (err) { alert('Error: ' + err.message); }
+        };
+
+        window.expelPromoter = async function (promEmail) {
+            const promoter = state.promotersMap[promEmail];
+            const name = promoter ? promoter.promoterName : promEmail;
+            if (!confirm(`¿Expulsar al promotor "${name}"?\n\nSus coaches quedarán sin promotor. Sus datos se conservan.`)) return;
+            try {
+                await setDoc(doc(db, "promoters", promEmail), { status: 'inactive' }, { merge: true });
+                alert(`✅ ${name} ha sido expulsado. Sus datos se conservan.`);
+            } catch (err) { alert('Error: ' + err.message); }
+        };
+
+        // ─── PROMOTER REPORTS (DIRECTOR VIEW) ───────────────────────────────────────
+
+        window.switchPromoterReporteSub = function(sub) {
+            document.getElementById('prpt-section-recl').style.display = sub==='recl' ? '' : 'none';
+            document.getElementById('prpt-section-venta').style.display = sub==='venta' ? '' : 'none';
+            const btnR = document.getElementById('prpt-sub-btn-recl');
+            const btnV = document.getElementById('prpt-sub-btn-venta');
+            if (btnR) { btnR.style.background = sub==='recl' ? 'var(--gold)' : 'rgba(255,255,255,0.08)'; btnR.style.color = sub==='recl' ? '#000' : 'var(--white)'; }
+            if (btnV) { btnV.style.background = sub==='venta' ? 'var(--teal)' : 'rgba(255,255,255,0.08)'; btnV.style.color = sub==='venta' ? '#000' : 'var(--white)'; }
+            if (sub==='recl') { refreshPromoterReclFilters(); renderPromoterReclSection(); }
+            else { refreshPromoterVentaFilters(); renderPromoterVentaSection(); }
+        };
+
+        function refreshPromoterReclFilters() {
+            const yearSel = document.getElementById('prpt-recl-year-filter');
+            if (yearSel) {
+                const years = new Set();
+                state.promoters.forEach(p => (p.reclutamiento||[]).forEach(r => { if (r.mes) { const y=r.mes.split(' ')[1]; if(y) years.add(y); } }));
+                const sorted = [...years].sort().reverse();
+                const cur = yearSel.value;
+                yearSel.innerHTML = '<option value="">Todos los años</option>' + sorted.map(y=>`<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
+                if (!cur && sorted.length) yearSel.value = sorted[0];
+            }
+            const promSel = document.getElementById('prpt-recl-promotor-filter');
+            if (promSel) {
+                const cur = promSel.value;
+                promSel.innerHTML = '<option value="">Todos los promotores</option>' +
+                    state.promoters.slice().sort((a,b)=>(a.promoterName||'').localeCompare(b.promoterName||''))
+                    .map(p=>`<option value="${escapeHtml(p.email)}" ${p.email===cur?'selected':''}>${escapeHtml(p.promoterName)}</option>`).join('');
+            }
+        }
+
+        function refreshPromoterVentaFilters() {
+            const yearSel = document.getElementById('prpt-venta-year-filter');
+            if (yearSel) {
+                const years = new Set();
+                state.promoters.forEach(p => (p.ventaCarrera||[]).forEach(r => { if (r.mes) { const y=r.mes.split(' ')[1]; if(y) years.add(y); } }));
+                const sorted = [...years].sort().reverse();
+                const cur = yearSel.value;
+                yearSel.innerHTML = '<option value="">Todos los años</option>' + sorted.map(y=>`<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
+                if (!cur && sorted.length) yearSel.value = sorted[0];
+            }
+            const promSel = document.getElementById('prpt-venta-promotor-filter');
+            if (promSel) {
+                const cur = promSel.value;
+                promSel.innerHTML = '<option value="">Todos los promotores</option>' +
+                    state.promoters.slice().sort((a,b)=>(a.promoterName||'').localeCompare(b.promoterName||''))
+                    .map(p=>`<option value="${escapeHtml(p.email)}" ${p.email===cur?'selected':''}>${escapeHtml(p.promoterName)}</option>`).join('');
+            }
+        }
+
+        function makePromoterCalendar(promoter, dataArray, detailType) {
+            // dataArray = promoter.reclutamiento OR promoter.ventaCarrera
+            const dataMap = {};
+            (dataArray||[]).forEach(r => { if (r.mes) dataMap[r.mes] = r; });
+
+            const allYears = [...new Set(Object.keys(dataMap).map(m=>m.split(' ')[1]).filter(Boolean))].sort().reverse();
+            const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+            if (!allYears.length) return '<div style="color:var(--slate);font-size:12px;padding:8px 0;">Sin reportes aún.</div>';
+
+            return allYears.map(year => {
+                const mesesFull = MONTHS_ES.map(m => `${m} ${year}`);
+                const siCount = mesesFull.filter(m => dataMap[m]?.q1==='si').length;
+                const noCount = mesesFull.filter(m => dataMap[m]?.q1==='no').length;
+                const pending = 12 - siCount - noCount;
+
+                const boxes = mesesFull.map((mesFull,i) => {
+                    const entry = dataMap[mesFull];
+                    let bg='rgba(255,255,255,0.06)', icon='·', color='rgba(255,255,255,0.15)', border='rgba(255,255,255,0.08)', cursor='default', clickable=false;
+                    if (entry) {
+                        if (entry.q1==='si') { bg='rgba(16,185,129,0.25)'; icon='✓'; color='var(--green)'; border='var(--green)'; clickable=true; cursor='pointer'; }
+                        else if (entry.q1==='no') { bg='rgba(239,68,68,0.25)'; icon='✗'; color='var(--red)'; border='var(--red)'; }
+                    }
+                    const clickAttr = clickable ? `onclick="showPromoterDetail('${escapeHtml(promoter.promoterName)}','${mesFull}','${detailType}','${encodeURIComponent(JSON.stringify(entry))}')" title="Ver detalles"` : '';
+                    return `<div ${clickAttr} style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;background:${bg};border:1px solid ${border};border-radius:8px;cursor:${cursor};min-height:62px;" ${clickable?'onmouseover="this.style.opacity=\'0.8\'"onmouseout="this.style.opacity=\'1\'"':''}>
+                        <div style="font-size:10px;font-weight:700;color:var(--slate);">${MESES_ABREV[i]}</div>
+                        <div style="font-size:18px;font-weight:800;color:${color};">${icon}</div>
+                    </div>`;
+                }).join('');
+
+                return `
+                <div style="margin-bottom:12px;">
+                    ${allYears.length>1?`<div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px;">${year}</div>`:''}
+                    <div style="display:flex;gap:10px;font-size:12px;margin-bottom:8px;">
+                        <span style="color:var(--green);font-weight:700;"><i class="fa fa-circle-check"></i> ${siCount} Sí</span>
+                        <span style="color:var(--red);font-weight:700;"><i class="fa fa-circle-xmark"></i> ${noCount} No</span>
+                        ${pending>0?`<span style="color:var(--slate);">${pending} pendientes</span>`:''}
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:5px;">${boxes}</div>
+                </div>`;
+            }).join('');
+        }
+
+        window.showPromoterDetail = function(promoterName, mes, detailType, entryJson) {
+            const entry = JSON.parse(decodeURIComponent(entryJson));
+            const titleEl = document.getElementById('prpt-detail-title');
+            const headerEl = document.getElementById('prpt-detail-header');
+            const contentEl = document.getElementById('prpt-detail-content');
+            if (titleEl) titleEl.innerHTML = detailType==='recl' ? '<i class="fa fa-people-group"></i> Reclutamiento' : '<i class="fa fa-user-graduate"></i> Venta de Carrera de Coach';
+            if (headerEl) headerEl.innerHTML = `<strong style="color:var(--white);">${escapeHtml(promoterName)}</strong> · ${escapeHtml(mes)}`;
+            if (contentEl) {
+                if (detailType === 'recl') {
+                    contentEl.innerHTML = `
+                    <div style="padding:12px;background:rgba(16,185,129,0.09);border-left:3px solid var(--green);border-radius:6px;">
+                        <div style="font-weight:700;color:var(--green);margin-bottom:4px;"><i class="fa fa-circle-check"></i> ¿Tiene prospectos en entrenamiento?</div>
+                        <div>Sí</div>
+                    </div>
+                    <div style="padding:12px;background:rgba(255,255,255,0.04);border-left:3px solid var(--gold);border-radius:6px;">
+                        <div style="font-weight:700;color:var(--gold);margin-bottom:4px;"><i class="fa fa-users"></i> Cantidad de prospectos</div>
+                        <div>${escapeHtml(entry.q2||'—')}</div>
+                    </div>
+                    <div style="padding:12px;background:rgba(255,255,255,0.04);border-left:3px solid var(--blue);border-radius:6px;">
+                        <div style="font-weight:700;color:var(--blue);margin-bottom:4px;"><i class="fa fa-id-card"></i> Nombres</div>
+                        <div style="white-space:pre-wrap;">${escapeHtml(entry.q3||'—')}</div>
+                    </div>
+                    <div style="padding:12px;background:rgba(255,255,255,0.04);border-left:3px solid var(--teal);border-radius:6px;">
+                        <div style="font-weight:700;color:var(--teal);margin-bottom:4px;"><i class="fa fa-handshake"></i> Compromiso de formalización</div>
+                        <div style="white-space:pre-wrap;">${escapeHtml(entry.q4||'—')}</div>
+                    </div>`;
+                } else {
+                    contentEl.innerHTML = `
+                    <div style="padding:12px;background:rgba(16,185,129,0.09);border-left:3px solid var(--green);border-radius:6px;">
+                        <div style="font-weight:700;color:var(--green);margin-bottom:4px;"><i class="fa fa-circle-check"></i> ¿Tiene agente en mente para coach?</div>
+                        <div>Sí</div>
+                    </div>
+                    <div style="padding:12px;background:rgba(255,255,255,0.04);border-left:3px solid var(--blue);border-radius:6px;">
+                        <div style="font-weight:700;color:var(--blue);margin-bottom:4px;"><i class="fa fa-user"></i> Nombre del agente</div>
+                        <div>${escapeHtml(entry.q2||'—')}</div>
+                    </div>
+                    <div style="padding:12px;background:rgba(255,255,255,0.04);border-left:3px solid var(--teal);border-radius:6px;">
+                        <div style="font-weight:700;color:var(--teal);margin-bottom:4px;"><i class="fa fa-calendar-check"></i> ¿Para cuándo lo formaliza?</div>
+                        <div style="white-space:pre-wrap;">${escapeHtml(entry.q3||'—')}</div>
+                    </div>`;
+                }
+            }
+            document.getElementById('prpt-detail-modal').classList.add('open');
+        };
+
+        function renderPromoterCalendarSection(containerId, filterPromotorId, filterYearId, dataField, detailType) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const promF = document.getElementById(filterPromotorId)?.value || '';
+            const yearF = document.getElementById(filterYearId)?.value || '';
+
+            let promotersToShow = state.promoters.slice().sort((a,b)=>(a.promoterName||'').localeCompare(b.promoterName||''));
+            if (promF) promotersToShow = promotersToShow.filter(p => p.email === promF);
+
+            if (!promotersToShow.length) {
+                container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay promotores.</div>';
+                return;
+            }
+
+            const html = promotersToShow.map(promoter => {
+                const dataArray = (promoter[dataField]||[]).filter(r => !yearF || r.mes?.endsWith(' '+yearF));
+                const calHtml = makePromoterCalendar(promoter, dataArray.length ? dataArray : (promoter[dataField]||[]).filter(r => !yearF || r.mes?.endsWith(' '+yearF)), detailType);
+                // If year filter, re-filter
+                const filteredData = yearF ? (promoter[dataField]||[]).filter(r => r.mes?.endsWith(' '+yearF)) : (promoter[dataField]||[]);
+                const calendarHtml = makePromoterCalendarFiltered(promoter, filteredData, yearF, detailType);
+                return `
+                <div style="background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">
+                    <div style="margin-bottom:14px;">
+                        <div style="font-weight:700;font-size:15px;color:var(--white);"><i class="fa fa-user-tie" style="color:var(--gold);margin-right:6px;"></i>${escapeHtml(promoter.promoterName)}</div>
+                        <div style="font-size:11px;color:var(--slate);">${escapeHtml(promoter.email)}</div>
+                    </div>
+                    ${calendarHtml}
+                </div>`;
+            }).join('');
+
+            container.innerHTML = html || '<div class="empty-state"><i class="fa fa-inbox"></i>No hay datos con los filtros actuales.</div>';
+        }
+
+        function makePromoterCalendarFiltered(promoter, dataArray, yearF, detailType) {
+            const dataMap = {};
+            (dataArray||[]).forEach(r => { if (r.mes) dataMap[r.mes] = r; });
+
+            const allDataMap = {};
+            ((promoter[detailType==='recl'?'reclutamiento':'ventaCarrera'])||[]).forEach(r => { if (r.mes) allDataMap[r.mes] = r; });
+
+            const allYears = [...new Set(Object.keys(allDataMap).map(m=>m.split(' ')[1]).filter(Boolean))].sort().reverse();
+            const yearsToShow = yearF ? (allYears.includes(yearF)?[yearF]:[]) : allYears;
+            const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+            if (!yearsToShow.length) return '<div style="color:var(--slate);font-size:12px;padding:8px 0;">Sin reportes aún.</div>';
+
+            return yearsToShow.map(year => {
+                const mesesFull = MONTHS_ES.map(m => `${m} ${year}`);
+                const siCount = mesesFull.filter(m => allDataMap[m]?.q1==='si').length;
+                const noCount = mesesFull.filter(m => allDataMap[m]?.q1==='no').length;
+                const pending = 12 - siCount - noCount;
+
+                const boxes = mesesFull.map((mesFull,i) => {
+                    const entry = allDataMap[mesFull];
+                    let bg='rgba(255,255,255,0.06)', icon='·', color='rgba(255,255,255,0.15)', border='rgba(255,255,255,0.08)', cursor='default', clickable=false;
+                    if (entry) {
+                        if (entry.q1==='si') { bg='rgba(16,185,129,0.25)'; icon='✓'; color='var(--green)'; border='var(--green)'; clickable=true; cursor='pointer'; }
+                        else if (entry.q1==='no') { bg='rgba(239,68,68,0.25)'; icon='✗'; color='var(--red)'; border='var(--red)'; }
+                    }
+                    const clickAttr = clickable ? `onclick="showPromoterDetail('${escapeHtml(promoter.promoterName)}','${mesFull}','${detailType}','${encodeURIComponent(JSON.stringify(entry))}')" title="Ver detalles"` : '';
+                    return `<div ${clickAttr} style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;background:${bg};border:1px solid ${border};border-radius:8px;cursor:${cursor};min-height:62px;" ${clickable?'onmouseover="this.style.opacity=\'0.8\'"onmouseout="this.style.opacity=\'1\'"':''}>
+                        <div style="font-size:10px;font-weight:700;color:var(--slate);">${MESES_ABREV[i]}</div>
+                        <div style="font-size:18px;font-weight:800;color:${color};">${icon}</div>
+                    </div>`;
+                }).join('');
+
+                return `
+                <div style="margin-bottom:${yearsToShow.length>1?'18px':'0'};">
+                    ${yearsToShow.length>1?`<div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px;">${year}</div>`:''}
+                    <div style="display:flex;gap:10px;font-size:12px;margin-bottom:8px;">
+                        <span style="color:var(--green);font-weight:700;"><i class="fa fa-circle-check"></i> ${siCount} Sí</span>
+                        <span style="color:var(--red);font-weight:700;"><i class="fa fa-circle-xmark"></i> ${noCount} No</span>
+                        ${pending>0?`<span style="color:var(--slate);">${pending} pendientes</span>`:''}
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:5px;">${boxes}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderPromoterReclSection() {
+            const container = document.getElementById('promoter-recl-grid');
+            if (!container) return;
+            const promF = document.getElementById('prpt-recl-promotor-filter')?.value || '';
+            const yearF = document.getElementById('prpt-recl-year-filter')?.value || '';
+            let promotersToShow = state.promoters.slice().sort((a,b)=>(a.promoterName||'').localeCompare(b.promoterName||''));
+            if (promF) promotersToShow = promotersToShow.filter(p => p.email === promF);
+            if (!promotersToShow.length) { container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay promotores.</div>'; return; }
+            const html = promotersToShow.map(p => `
+                <div style="background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">
+                    <div style="margin-bottom:14px;">
+                        <div style="font-weight:700;font-size:15px;color:var(--white);"><i class="fa fa-user-tie" style="color:var(--gold);margin-right:6px;"></i>${escapeHtml(p.promoterName)}</div>
+                        <div style="font-size:11px;color:var(--slate);">${escapeHtml(p.email)}</div>
+                    </div>
+                    ${makePromoterCalendarFiltered(p, p.reclutamiento||[], yearF, 'recl')}
+                </div>`).join('');
+            container.innerHTML = html || '<div class="empty-state"><i class="fa fa-inbox"></i>No hay datos de reclutamiento.</div>';
+        }
+
+        function renderPromoterVentaSection() {
+            const container = document.getElementById('promoter-venta-grid');
+            if (!container) return;
+            const promF = document.getElementById('prpt-venta-promotor-filter')?.value || '';
+            const yearF = document.getElementById('prpt-venta-year-filter')?.value || '';
+            let promotersToShow = state.promoters.slice().sort((a,b)=>(a.promoterName||'').localeCompare(b.promoterName||''));
+            if (promF) promotersToShow = promotersToShow.filter(p => p.email === promF);
+            if (!promotersToShow.length) { container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i>No hay promotores.</div>'; return; }
+            const html = promotersToShow.map(p => `
+                <div style="background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">
+                    <div style="margin-bottom:14px;">
+                        <div style="font-weight:700;font-size:15px;color:var(--white);"><i class="fa fa-user-tie" style="color:var(--gold);margin-right:6px;"></i>${escapeHtml(p.promoterName)}</div>
+                        <div style="font-size:11px;color:var(--slate);">${escapeHtml(p.email)}</div>
+                    </div>
+                    ${makePromoterCalendarFiltered(p, p.ventaCarrera||[], yearF, 'venta')}
+                </div>`).join('');
+            container.innerHTML = html || '<div class="empty-state"><i class="fa fa-inbox"></i>No hay datos de venta de carrera.</div>';
+        }
+
+        window.renderPromoterReclSection = renderPromoterReclSection;
+        window.renderPromoterVentaSection = renderPromoterVentaSection;
 
         // ─── BOOT ─────────────────────────────────────────────────────────────────────
         window.refreshAll = refreshAll;
@@ -2496,6 +3894,23 @@
         window.refreshChartAgents = refreshChartAgents;
         window.renderCoachReportes = renderCoachReportes;
         window.refreshCoachReporteMonthFilter = refreshCoachReporteMonthFilter;
+        window.switchReporteSub = switchReporteSub;
+        window.renderReclutamientoSection = renderReclutamientoSection;
+        window.refreshReclFilters = refreshReclFilters;
+        window.renderVentasSection = renderVentasSection;
+        window.showReclDetail = showReclDetail;
+        window.closeReclDetail = closeReclDetail;
+        window.switchPromoterReporteSub = switchPromoterReporteSub;
+        window.showPromoterDetail = showPromoterDetail;
+        window.renderPromoterReclSection = renderPromoterReclSection;
+        window.renderPromoterVentaSection = renderPromoterVentaSection;
+        window.renderGestion = renderGestion;
+        window.renderGestionAll = renderGestionAll;
+        window.startListeningPending = startListeningPending;
+        window.updateApprovalFields = updateApprovalFields;
+        window.saveMemberChanges = saveMemberChanges;
+        window.updateAssignLabel = updateAssignLabel;
+        window.expelMember = expelMember;
         window.validateDay = validateDay;
         window.ratio = ratio;
         window.destroyChart = destroyChart;
