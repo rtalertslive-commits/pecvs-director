@@ -151,6 +151,27 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* Conceptos: layout 2-cols en desktop, single-col reordenado en mobile.
+           Mobile order: visual funnel → defs → MÉTRICAS DE VOLUMEN Y VALOR → totopos */
+        .conceptos-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .conceptos-prima,
+        .conceptos-totopos {
+            grid-column: 1 / -1;
+        }
+        @media (max-width: 720px) {
+            .conceptos-grid {
+                grid-template-columns: 1fr;
+            }
+            .conceptos-visual { order: 1; position: static !important; }
+            .conceptos-defs   { order: 2; }
+            .conceptos-prima  { order: 3; }
+            .conceptos-totopos { order: 4; }
+        }
+
         /* Hover SOLO en dispositivos con cursor real (mouse). Sin esto el touch
            dispara :hover sticky que se queda hasta el próximo tap en otro lado. */
         @media (hover: hover) and (pointer: fine) {
@@ -1505,9 +1526,9 @@
                     <i class="fa fa-graduation-cap-solid"></i> EL EMBUDO DE EFECTIVIDAD
                 </h2>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px;">
-                    <!-- COLUMNA DEFINICIONES -->
-                    <div>
+                <div class="conceptos-grid">
+                    <!-- DEFINICIONES P/E/C/V — desktop: columna izq · mobile: order 2 -->
+                    <div class="conceptos-defs">
                         <div style="margin-bottom:24px;">
                             <strong style="color:var(--gold); font-size:1.2em;">P - Contactos del día</strong><br>
                             <p style="font-size:14px; margin:8px 0; color:var(--white);"><strong>Definición:</strong> Personas buscadas activamente. Empieza a contar desde que hay contacto. En venta en frío, no cuenta un simple saludo superficial. Trata de obtener datos clave, como nombre, teléfono, etc.</p>
@@ -1528,26 +1549,10 @@
                             <p style="font-size:14px; margin:8px 0; color:var(--white);"><strong>Definición:</strong> Número de individuos (almas) a los que vendiste; si le vendiste varias solicitudes a la misma persona, cuenta como un solo cierre.</p>
                             <em style="color:var(--slate); font-size:12px;">¿Qué mide?: Efectividad de cierre y convicción.</em>
                         </div>
-
-                        <h2 style="font-family:'Playfair Display',serif; color:var(--gold); border-bottom: 2px solid var(--gold); padding-bottom:10px; margin:40px 0 25px; font-size:22px;">
-                            <i class="fa fa-chart-line"></i> MÉTRICAS DE VOLUMEN Y VALOR
-                        </h2>
-
-                        <div style="margin-bottom:24px;">
-                            <strong style="color:var(--gold); font-size:1.2em;">S - Número de solicitudes</strong><br>
-                            <p style="font-size:14px; margin:8px 0; color:var(--white);"><strong>Definición:</strong> Suma de solicitudes vendidas. Aquí SÍ se cuentan todas las solicitudes, sin importar si le vendiste a la misma persona varias solicitudes.</p>
-                            <em style="color:var(--slate); font-size:12px;">¿Qué mide?: Productividad.</em>
-                            <p style="font-size:13px; margin:12px 0 0; color:var(--slate); line-height:1.55;"><strong style="color:var(--gold);">Nota:</strong> ¿Por qué hay dos conceptos similares? Cierres (V) y Solicitudes (S). Hay veces que a una misma persona se le vende 2 solicitudes, incremento e inclusión. Con el fin de que las solicitudes no rompan el embudo matemático que te permite medir tu eficiencia en cada etapa del proceso de la venta, se crearon esos dos conceptos.</p>
-                        </div>
-                        <div style="margin-bottom:24px;">
-                            <strong style="color:var(--gold); font-size:1.2em;">$ - Prima total</strong><br>
-                            <p style="font-size:14px; margin:8px 0; color:var(--white);"><strong>Definición:</strong> Suma de la Prima Neta total vendida en el día.</p>
-                            <em style="color:var(--slate); font-size:12px;">¿Qué mide?: Rentabilidad financiera.</em>
-                        </div>
                     </div>
 
-                    <!-- COLUMNA VISUAL -->
-                    <div style="background: rgba(255,255,255,0.03); border-radius:15px; padding:25px; text-align:center; border: 1px solid rgba(255,255,255,0.05); height: fit-content; position: sticky; top: 20px;">
+                    <!-- VISUAL EMBUDO — desktop: columna der sticky · mobile: order 1 -->
+                    <div class="conceptos-visual" style="background: rgba(255,255,255,0.03); border-radius:15px; padding:25px; text-align:center; border: 1px solid rgba(255,255,255,0.05); height: fit-content; position: sticky; top: 20px;">
                         <h2 style="font-family:'Playfair Display',serif; color:var(--white); margin-top:0;">EMBUDO MATEMÁTICO</h2>
                         <div style="background:var(--gold); color:var(--bg); padding:4px 15px; border-radius:20px; display:inline-block; font-weight:bold; font-size:12px; margin-bottom:30px;">
                             REGLA: P ≥ E ≥ C ≥ V
@@ -1561,6 +1566,42 @@
                         <p style="font-size:13px; color:var(--slate); margin-top:35px; line-height:1.6; text-align:justify; border-top: 1px solid rgba(255,255,255,0.1); padding-top:20px;">
                             En sentido estricto el número debe ir de mayor a menor (o como máximo igual) en cada etapa del proceso. Es decir: <strong>nunca puede haber más entrevistas que prospectos contactados</strong>, ni más cotizaciones que entrevistas realizadas, ni más ventas concretadas que cotizaciones.
                         </p>
+                    </div>
+
+                    <!-- MÉTRICAS DE VOLUMEN Y VALOR (S + $) — desktop: full-width · mobile: order 3 -->
+                    <div class="conceptos-prima">
+                        <h2 style="font-family:'Playfair Display',serif; color:var(--gold); border-bottom: 2px solid var(--gold); padding-bottom:10px; margin:20px 0 25px; font-size:22px;">
+                            <i class="fa fa-chart-line"></i> MÉTRICAS DE VOLUMEN Y VALOR
+                        </h2>
+                        <div style="margin-bottom:24px;">
+                            <strong style="color:var(--gold); font-size:1.2em;">S - Número de solicitudes</strong><br>
+                            <p style="font-size:14px; margin:8px 0; color:var(--white);"><strong>Definición:</strong> Suma de solicitudes vendidas. Aquí SÍ se cuentan todas las solicitudes, sin importar si le vendiste a la misma persona varias solicitudes.</p>
+                            <em style="color:var(--slate); font-size:12px;">¿Qué mide?: Productividad.</em>
+                            <p style="font-size:13px; margin:12px 0 0; color:var(--slate); line-height:1.55;"><strong style="color:var(--gold);">Nota:</strong> ¿Por qué hay dos conceptos similares? Cierres (V) y Solicitudes (S). Hay veces que a una misma persona se le vende 2 solicitudes, incremento e inclusión. Con el fin de que las solicitudes no rompan el embudo matemático que te permite medir tu eficiencia en cada etapa del proceso de la venta, se crearon esos dos conceptos.</p>
+                        </div>
+                        <div style="margin-bottom:24px;">
+                            <strong style="color:var(--gold); font-size:1.2em;">$ - Prima total</strong><br>
+                            <p style="font-size:14px; margin:8px 0; color:var(--white);"><strong>Definición:</strong> Suma de la Prima Neta total vendida en el día.</p>
+                            <em style="color:var(--slate); font-size:12px;">¿Qué mide?: Rentabilidad financiera.</em>
+                        </div>
+                    </div>
+
+                    <!-- TOTOPOS — desktop: full-width abajo · mobile: order 4 -->
+                    <div class="conceptos-totopos" style="padding:18px; background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.2); border-radius:12px;">
+                        <div style="display:flex; align-items:center; gap:14px; margin-bottom:10px;">
+                            <svg style="width:64px; height:64px; flex-shrink:0;"><use href="#totopo"/></svg>
+                            <strong style="color:var(--gold); font-size:1.3em;">Totopos — tu moneda</strong>
+                        </div>
+                        <p style="font-size:14px; margin:8px 0; color:var(--white);"><strong>¿Qué son?</strong> Moneda virtual que ganás por reportar tu día. Premian la disciplina y la honestidad — no importa si el día estuvo bueno o flojo, lo que cuenta es que reportes.</p>
+                        <p style="font-size:14px; margin:14px 0 6px; color:var(--white);"><strong>¿Cómo ganártelos?</strong> Ganás <strong>10 totopos por cada día reportado</strong> en cualquiera de estos dos casos:</p>
+                        <ul style="font-size:13px; margin:6px 0 8px 22px; color:var(--white); line-height:1.7; padding-left:0;">
+                            <li>🟢 <strong>Semáforo en verde</strong> — el embudo cumple las reglas.</li>
+                            <li>🌙 <strong>"Sin intento de venta hoy"</strong> — declaraste honestamente que no hubo actividad. Cuenta igual. La opción aparece cuando todos los valores están en 0.</li>
+                        </ul>
+                        <p style="font-size:13px; margin:8px 0; color:var(--slate);">Si el semáforo queda en 🔴 (datos rotos / embudo inválido) ese día <strong>no</strong> genera totopos. El corte se hace a las <strong>12:00 AM</strong> — durante el día puedes corregir las veces que quieras.</p>
+                        <p style="font-size:13px; margin:8px 0; color:var(--slate);">⚠️ <strong style="color:var(--gold);">Auditoría:</strong> Se revisará al final del mes si lo reportado coincide con lo ingresado.</p>
+                        <p style="font-size:14px; margin:12px 0 8px; color:var(--white);"><strong>¿Para qué sirven?</strong> Los canjéas en la pestaña <strong>Tienda</strong> por premios que el director pone disponibles.</p>
+                        <em style="color:var(--slate); font-size:12px;">¿Qué miden?: Tu compromiso y consistencia con el reporte diario.</em>
                     </div>
                 </div>
             </div>
