@@ -3453,23 +3453,44 @@
                 return;
             }
 
-            const promotoresConPendientes = new Set(allPendientes.map(p => p.promotorTeamCode).filter(Boolean));
-            const promotorOpts = '<option value="">Todos los promotores</option>' +
+            // Conteo de pendientes por promotor y por coach (para mostrar "(N)" en el dropdown).
+            const promotorPendienteCount = {};
+            const coachPendienteCount = {};
+            allPendientes.forEach(p => {
+                if (p.promotorTeamCode) {
+                    promotorPendienteCount[p.promotorTeamCode] = (promotorPendienteCount[p.promotorTeamCode] || 0) + 1;
+                }
+                if (p.coachEmail) {
+                    coachPendienteCount[p.coachEmail] = (coachPendienteCount[p.coachEmail] || 0) + 1;
+                }
+            });
+
+            // Mostramos TODOS los promotores activos con su conteo de pendientes (incluido 0).
+            // Asi el director ve la lista completa de equipos y entiende cuales no tienen problemas.
+            const promotorOpts = `<option value="">Todos los promotores (${allPendientes.length})</option>` +
                 (state.promoters || [])
-                    .filter(p => promotoresConPendientes.has(p.companyCode) || promotoresConPendientes.has(p.promotorCode))
+                    .filter(p => p.status !== 'inactive')
                     .sort((a, b) => (a.promoterName || '').localeCompare(b.promoterName || ''))
                     .map(p => {
                         const code = p.companyCode || p.promotorCode || '';
-                        return `<option value="${escapeHtml(code)}" ${pendientesPromotorFilter === code ? 'selected' : ''}>${escapeHtml(p.promoterName || p.email)}</option>`;
+                        const count = promotorPendienteCount[code] || 0;
+                        const label = (p.promoterName || p.email) + ` (${count})`;
+                        return `<option value="${escapeHtml(code)}" ${pendientesPromotorFilter === code ? 'selected' : ''}>${escapeHtml(label)}</option>`;
                     }).join('');
 
-            const coachesConPendientes = new Set(allPendientes.map(p => p.coachEmail).filter(Boolean));
-            const coachOpts = '<option value="">Todos los coaches</option>' +
-                (state.coaches || [])
-                    .filter(c => coachesConPendientes.has(c.email))
-                    .filter(c => !pendientesPromotorFilter || c.promotorTeamCode === pendientesPromotorFilter)
-                    .sort((a, b) => (a.coachName || '').localeCompare(b.coachName || ''))
-                    .map(c => `<option value="${escapeHtml(c.email)}" ${pendientesCoachFilter === c.email ? 'selected' : ''}>${escapeHtml(c.coachName || c.email)}</option>`).join('');
+            // Mismo patron para coaches. Cascade: si hay promotor seleccionado, solo
+            // muestra coaches de ese promotor.
+            const _filteredCoaches = (state.coaches || [])
+                .filter(c => c.status !== 'inactive')
+                .filter(c => !pendientesPromotorFilter || c.promotorTeamCode === pendientesPromotorFilter)
+                .sort((a, b) => (a.coachName || '').localeCompare(b.coachName || ''));
+            const _coachesTotalPendientes = _filteredCoaches.reduce((sum, c) => sum + (coachPendienteCount[c.email] || 0), 0);
+            const coachOpts = `<option value="">Todos los coaches (${_coachesTotalPendientes})</option>` +
+                _filteredCoaches.map(c => {
+                    const count = coachPendienteCount[c.email] || 0;
+                    const label = (c.coachName || c.email) + ` (${count})`;
+                    return `<option value="${escapeHtml(c.email)}" ${pendientesCoachFilter === c.email ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+                }).join('');
 
             // Brackets exclusivos con conteo por opción
             const tierCounts = { 0: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
