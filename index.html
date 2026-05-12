@@ -3387,12 +3387,22 @@
         // ─── BITÁCORA VIEW (solo lectura) ─────────────────────────────────────────────
         let bitCurrentWeeks = [];
 
-        function getBitAgentList() { return state.agents.map(a => a.name); }
-        function getBitAgentCoach(name) {
-            // Try agentCoachMap first (populated by startListeningAgentsForCoaches path)
-            if (state.agentCoachMap && state.agentCoachMap[name]) return state.agentCoachMap[name];
-            // Fallback: match via teamCode
-            const agent = state.agents.find(a => a.name === name);
+        // state.agents = array de objetos { name, email, teamCode, ... }.
+        // Para el refactor, usamos a.email como agentId (clave única).
+        // Display name viene de state.agentDetails[id].agentName.
+        function getBitAgentList() { return state.agents.map(a => a.email); } // array de IDs
+        function getBitAgentName(agentId) {
+            return state.agentDetails?.[agentId]?.agentName
+                || state.agents.find(a => a.email === agentId)?.name
+                || agentId;
+        }
+        function getBitAgentCoach(agentId) {
+            // Primero buscar en state.agentDetails (poblada por path 1, batched query)
+            if (state.agentDetails?.[agentId]?.coachEmail) return state.agentDetails[agentId].coachEmail;
+            // Fallback: state.agentCoachMap (poblada por path 2, legacy embedded)
+            if (state.agentCoachMap && state.agentCoachMap[agentId]) return state.agentCoachMap[agentId];
+            // Último fallback: matchear via teamCode del agent doc
+            const agent = state.agents.find(a => a.email === agentId);
             if (!agent) return null;
             const coach = state.coaches.find(c => c.agentTeamCode === agent.teamCode);
             return coach ? coach.email : null;
@@ -3412,13 +3422,18 @@
             const coachF = document.getElementById('bit-coach-filter').value;
             const sel = document.getElementById('bit-agent');
             const prev = sel.value;
-            const agentNames = getBitAgentList();
-            const agents = coachF
-                ? agentNames.filter(a => getBitAgentCoach(a) === coachF)
-                : agentNames;
+            const agentIds = getBitAgentList();
+            const filtered = coachF
+                ? agentIds.filter(id => getBitAgentCoach(id) === coachF)
+                : agentIds;
+            // Value = agentId (único), label = agentName (display)
             sel.innerHTML = '<option value="">— Selecciona agente —</option>' +
-                agents.map(a => `<option value="${a}">${a}</option>`).join('');
-            sel.value = agents.includes(prev) ? prev : '';
+                filtered
+                    .slice()
+                    .sort((a, b) => getBitAgentName(a).localeCompare(getBitAgentName(b)))
+                    .map(id => `<option value="${escapeHtml(id)}">${escapeHtml(getBitAgentName(id))}</option>`)
+                    .join('');
+            sel.value = filtered.includes(prev) ? prev : '';
             autoLoadBit();
         };
 
@@ -3438,7 +3453,7 @@
         };
 
         window.autoLoadBit = function () {
-            const agent = document.getElementById('bit-agent').value;
+            const agentId = document.getElementById('bit-agent').value;
             const semana = document.getElementById('bit-semana').value;
             const month = parseInt(document.getElementById('bit-month').value);
             const year = parseInt(document.getElementById('bit-year').value);
@@ -3446,21 +3461,21 @@
             const mes = MONTHS_ES[month - 1] + ' ' + year;
             const semIdx = parseInt(semana) - 1;
             const weekDays = bitCurrentWeeks[semIdx] || [];
-            buildBitWeekTable(weekDays, agent, mes, semana);
+            buildBitWeekTable(weekDays, agentId, mes, semana);
             const info = document.getElementById('bit-week-info');
-            if (weekDays.length && agent) {
+            if (weekDays.length && agentId) {
                 info.textContent = `📅 ${mes} · Semana ${semana} de ${bitCurrentWeeks.length} · Días: ${weekDays.map(d => d.dayName + ' ' + d.date).join(', ')}`;
             } else { info.textContent = ''; }
-            updateBitMonthTotals(agent, mes);
+            updateBitMonthTotals(agentId, mes);
         };
 
-        function buildBitWeekTable(weekDays, agent, mes, semana) {
+        function buildBitWeekTable(weekDays, agentId, mes, semana) {
             const tbody = document.getElementById('bit-week-body');
-            if (!weekDays.length || !agent) {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--slate);padding:20px;">${agent ? '' : 'Selecciona un agente para ver su bitácora.'}</td></tr>`;
+            if (!weekDays.length || !agentId) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--slate);padding:20px;">${agentId ? '' : 'Selecciona un agente para ver su bitácora.'}</td></tr>`;
                 resetBitTotals(); return;
             }
-            const entry = state.entries.find(e => e.agent === agent && e.mes === mes && e.semana == semana);
+            const entry = state.entries.find(e => (e.agentId || e.agent) === agentId && e.mes === mes && e.semana == semana);
             const diasMap = {};
             if (entry) entry.dias.forEach(d => { diasMap[d.dia] = d; });
             let semP = 0, semE = 0, semC = 0, semV = 0, semS = 0, semPrima = 0;
@@ -3486,9 +3501,9 @@
             document.getElementById('bit-tt-$').textContent = '$' + semPrima.toFixed(0);
         }
 
-        function updateBitMonthTotals(agent, mes) {
-            if (!agent) { resetBitMonthTotals(); return; }
-            const monthEntries = state.entries.filter(e => e.agent === agent && e.mes === mes);
+        function updateBitMonthTotals(agentId, mes) {
+            if (!agentId) { resetBitMonthTotals(); return; }
+            const monthEntries = state.entries.filter(e => (e.agentId || e.agent) === agentId && e.mes === mes);
             let mP = 0, mE = 0, mC = 0, mV = 0, mS = 0, mPrima = 0;
             monthEntries.forEach(e => {
                 if (e.totales) { mP += e.totales.P || 0; mE += e.totales.E || 0; mC += e.totales.C || 0; mV += e.totales.V || 0; mS += e.totales.S || 0; mPrima += parseFloat(e.totales.prima) || 0; }
@@ -3514,12 +3529,12 @@
 
         window.renderBitHistory = function () {
             const grid = document.getElementById('bit-history-grid');
-            if (!grid) return; // modal de log eliminado, no hay grid que poblar
+            if (!grid) return;
             const coachF = document.getElementById('bit-coach-filter').value;
-            const agentF = document.getElementById('bit-agent').value;
+            const agentF = document.getElementById('bit-agent').value; // agentId
             let filtered = state.entries;
-            if (coachF) filtered = filtered.filter(e => getBitAgentCoach(e.agent) === coachF);
-            if (agentF) filtered = filtered.filter(e => e.agent === agentF);
+            if (coachF) filtered = filtered.filter(e => getBitAgentCoach(e.agentId || e.agent) === coachF);
+            if (agentF) filtered = filtered.filter(e => (e.agentId || e.agent) === agentF);
             if (!filtered.length) {
                 grid.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i> No hay entradas.</div>';
                 return;
@@ -3537,7 +3552,8 @@
         window.loadBitEntry = function (i) {
             const e = state.entries[i];
             if (!e) return;
-            document.getElementById('bit-agent').value = e.agent;
+            // bit-agent value es agentId (no nombre)
+            document.getElementById('bit-agent').value = e.agentId || e.agent;
             const parts = e.mes.split(' ');
             const mIdx = MONTHS_ES.indexOf(parts[0]);
             if (mIdx >= 0) {
@@ -3754,12 +3770,13 @@
                 .filter(a => allowedTeamCodes.includes(a.teamCode))
                 .sort((a, b) => a.name.localeCompare(b.name));
 
-            const opts = agentsForFilter.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
+            // value = a.email (agentId único), label = a.name (display)
+            const opts = agentsForFilter.map(a => `<option value="${escapeHtml(a.email)}">${escapeHtml(a.name)}</option>`).join('');
             const el = document.getElementById('chart-agent-sel');
             if (!el) return;
             const cur = el.value;
             el.innerHTML = '<option value="__all__">Todos (Total equipo)</option>' + opts;
-            if (cur === '__all__' || agentsForFilter.some(a => a.name === cur)) el.value = cur;
+            if (cur === '__all__' || agentsForFilter.some(a => a.email === cur)) el.value = cur;
             else el.value = '__all__';
         }
 
@@ -3948,26 +3965,25 @@
                 allowedTeamCodes.includes(e.teamCode)
             );
 
-            // aggregate per agent (re-summing only valid days + tracking red activity)
-            // ALSO build agMapMobile que suma TODO (válido + rojo) sin distinción —
-            // usado por el mobile leaderboard para "simplificar".
+            // Aggregate por agentId (clave única). Display name en agMap[id].name.
+            // Fixea bug de homónimos: dos agentes con mismo nombre se cuentan separados.
             const agMap = {};
             const agMapMobile = {};
             filtered.forEach(e => {
-                if (!agMap[e.agent]) agMap[e.agent] = { P: 0, E: 0, C: 0, V: 0, S: 0, prima: 0, redS: 0, redPrima: 0 };
-                if (!agMapMobile[e.agent]) agMapMobile[e.agent] = { P: 0, E: 0, C: 0, V: 0, S: 0, prima: 0 };
+                const id = e.agentId || e.agent;
+                const name = e.agent || id;
+                if (!agMap[id]) agMap[id] = { name, P: 0, E: 0, C: 0, V: 0, S: 0, prima: 0, redS: 0, redPrima: 0 };
+                if (!agMapMobile[id]) agMapMobile[id] = { name, P: 0, E: 0, C: 0, V: 0, S: 0, prima: 0 };
                 e.dias.forEach(d => {
-                    // Mobile aggregation: sumar todo sin filtrar
-                    COLS.forEach(c => agMapMobile[e.agent][c] += (d[c] || 0));
-                    agMapMobile[e.agent].prima += d.prima;
-                    // Desktop aggregation: filtrar por validateDay (valid vs red)
+                    COLS.forEach(c => agMapMobile[id][c] += (d[c] || 0));
+                    agMapMobile[id].prima += d.prima;
                     const { ok } = validateDay(d);
                     if (ok) {
-                        COLS.forEach(c => agMap[e.agent][c] += (d[c] || 0));
-                        agMap[e.agent].prima += d.prima;
+                        COLS.forEach(c => agMap[id][c] += (d[c] || 0));
+                        agMap[id].prima += d.prima;
                     } else {
-                        agMap[e.agent].redS += (d.S || 0);
-                        agMap[e.agent].redPrima += d.prima;
+                        agMap[id].redS += (d.S || 0);
+                        agMap[id].redPrima += d.prima;
                     }
                 });
             });
@@ -4021,12 +4037,13 @@
 
             tbody.innerHTML = agents.map((ag, i) => {
                 const d = agMap[ag];
+                const displayName = d.name || ag;
                 const primaFmt = d.prima.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const redPrimaFmt = d.redPrima.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
                 const totalPrimaFmt = (d.prima + d.redPrima).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 return `<tr>
                     <td class="rank-num">${i + 1}</td>
-                    <td class="agent-name-cell">${ag}</td>
+                    <td class="agent-name-cell">${escapeHtml(displayName)}</td>
                     <td style="border-left:2px solid #475569">${d.P}</td><td>${d.E}</td><td>${d.C}</td><td>${d.V}</td><td>${d.S}</td>
                     <td class="ratio-cell" style="border-left:2px solid #475569">${ratioPct(d.E, d.P)}</td>
                     <td class="ratio-cell">${ratioPct(d.C, d.E)}</td>
@@ -4129,6 +4146,7 @@
 
             rowsEl.innerHTML = agents.map((ag, i) => {
                 const d = agMap[ag];
+                const displayName = d.name || ag;
                 const primaFmt = d.prima.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const ef = d.P > 0 ? ((d.V / d.P) * 100).toFixed(1) + '%' : '—';
                 const dpv = d.V > 0 ? '$' + (d.prima / d.V).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
@@ -4136,7 +4154,7 @@
                     <div class="lb-mobile-row" onclick="toggleLbMobileRow(this)">
                         <div class="lb-mobile-row-header">
                             <div class="lb-rank">#${i + 1}</div>
-                            <div class="lb-name">${escapeHtml(ag)}</div>
+                            <div class="lb-name">${escapeHtml(displayName)}</div>
                             <div class="lb-chevron"><i class="fa fa-chevron-down"></i></div>
                         </div>
                         <div class="lb-mobile-row-stats">
@@ -4225,7 +4243,8 @@
                 }
             }
 
-            entries = filtered.filter(e => agSel === '__all__' || e.agent === agSel);
+            // chart-agent-sel.value es agentId (o '__all__'). Compare por id único.
+            entries = filtered.filter(e => agSel === '__all__' || (e.agentId || e.agent) === agSel);
 
             // Build x-axis labels: unique "mes · SemN" sorted by date
             const labelSet = [...new Set(entries.map(e => `${e.mes}·S${e.semana}`))].sort((a, b) => {
@@ -4406,17 +4425,20 @@
                 }
             }
 
+            // Keyed por agentId (clave única). Display name via agMap[id].name.
             const agMap = {};
             entries.forEach(e => {
-                if (!agMap[e.agent]) agMap[e.agent] = { P: 0, E: 0, C: 0, V: 0, S: 0, prima: 0 };
-                COLS.forEach(c => agMap[e.agent][c] += e.totales[c]);
-                agMap[e.agent].prima += e.totales.prima;
+                const id = e.agentId || e.agent;
+                const name = e.agent || id;
+                if (!agMap[id]) agMap[id] = { name, P: 0, E: 0, C: 0, V: 0, S: 0, prima: 0 };
+                COLS.forEach(c => agMap[id][c] += e.totales[c]);
+                agMap[id].prima += e.totales.prima;
             });
 
-            const agents = Object.keys(agMap);
+            const agents = Object.keys(agMap); // agentIds
             agents.sort((a, b) => agMap[b].prima - agMap[a].prima);
 
-            const labels = agents;
+            const labels = agents.map(id => agMap[id].name);
             const primas = agents.map(a => agMap[a].prima);
             const Vs = agents.map(a => agMap[a].V);
             const Ps = agents.map(a => agMap[a].P);
