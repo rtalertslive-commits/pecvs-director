@@ -1017,6 +1017,7 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 20px;
+            min-width: 0;
         }
 
         .chart-card.full {
@@ -1036,6 +1037,126 @@
             position: relative;
         }
 
+        /* ─── KPI Charts: scroll horizontal con scrollbar custom siempre visible ─── */
+        .chart-wrap.kpi-scroll {
+            overflow-x: scroll;
+            overflow-y: hidden;
+            width: 100%;
+            min-width: 0;
+            /* Ocultamos la scrollbar nativa — usamos custom abajo (Mac/iOS fade) */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .chart-wrap.kpi-scroll::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+        /* Ancho dinamico via --bar-count seteado por JS. Si pocas barras, 100%; si muchas, N*50px. */
+        .kpi-chart-inner {
+            height: 100%;
+            position: relative;
+            width: max(100%, calc(var(--bar-count, 1) * 50px));
+        }
+
+        /* Pills de vista para los KPIs (Top 10 / Top 30 / Todos / Foco 30 / Foco 10) */
+        .kpi-pills {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .kpi-pill {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            color: var(--slate);
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background .15s ease, color .15s ease, border-color .15s ease;
+            font-family: inherit;
+        }
+        .kpi-pill:hover:not(.active) {
+            background: rgba(255,255,255,0.08);
+            color: var(--white);
+        }
+        .kpi-pill.active {
+            background: rgba(212,175,55,0.15);
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+        .kpi-pill[hidden] { display: none !important; }
+
+        /* ─── KPI HTML Legend (afuera del scroll horizontal) ─── */
+        .kpi-chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .chart-legend-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 14px;
+            color: var(--white);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s, opacity .15s, border-color .15s;
+        }
+        .chart-legend-btn:hover {
+            background: rgba(255,255,255,0.07);
+            border-color: rgba(255,255,255,0.18);
+        }
+        .chart-legend-btn.is-hidden {
+            opacity: 0.42;
+            text-decoration: line-through;
+        }
+        .chart-legend-btn .legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        /* ─── Scrollbar custom SIEMPRE visible (debajo del chart KPI) ─── */
+        .kpi-custom-scrollbar {
+            height: 10px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 5px;
+            margin: 8px 0 2px;
+            position: relative;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+        }
+        .kpi-custom-scroll-thumb {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--gold);
+            border-radius: 5px;
+            min-width: 28px;
+            cursor: grab;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.15) inset,
+                        0 1px 2px rgba(0,0,0,0.3);
+        }
+        .kpi-custom-scroll-thumb:active {
+            cursor: grabbing;
+            background: var(--gold-l);
+        }
+
         /* ═══ MOBILE: charts 1-col + padding reducido (override del .charts-grid de arriba) ═══ */
         @media (max-width: 767px) {
             .charts-grid { grid-template-columns: 1fr !important; gap: 12px; }
@@ -1046,6 +1167,17 @@
             .charts-controls { flex-direction: column; gap: 8px; }
             .charts-controls > div { width: 100%; }
             .charts-controls select { width: 100%; }
+            /* Pills: scroll horizontal en mobile en vez de wrap */
+            .kpi-pills {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding-bottom: 2px;
+            }
+            .kpi-pills::-webkit-scrollbar { display: none; }
+            .kpi-pill { padding: 8px 12px; font-size: 13px; }
+            .chart-legend-btn { font-size: 10px; padding: 4px 9px; }
         }
 
         /* FUNNEL INDICATOR */
@@ -1526,38 +1658,62 @@
                             <option value="all">Todo el historial</option>
                         </select>
                     </div>
+                    <div style="flex:1 1 100%;">
+                        <label class="field-label">Vista</label>
+                        <div class="kpi-pills" id="kpi-view-pills">
+                            <button class="kpi-pill active" data-mode="top10" onclick="setKpiViewMode('top10')">🥇 Top 10</button>
+                            <button class="kpi-pill" data-mode="top30" onclick="setKpiViewMode('top30')">🏆 Top 30</button>
+                            <button class="kpi-pill" data-mode="all" onclick="setKpiViewMode('all')">👥 Todos</button>
+                            <button class="kpi-pill" data-mode="foco30" onclick="setKpiViewMode('foco30')">🎯 Foco 30</button>
+                            <button class="kpi-pill" data-mode="foco10" onclick="setKpiViewMode('foco10')">🔥 Foco 10</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="charts-grid">
                     <!-- 1. Volumen PECVS Completo (full width) -->
                     <div class="chart-card full">
                         <h3><i class="fa fa-arrows-to-circle"></i> Volumen PECVS Completo por Agente</h3>
-                        <div class="chart-wrap"><canvas id="kpiVolumeFull"></canvas></div>
+                        <div class="kpi-chart-legend" id="legend-kpiVolumeFull"></div>
+                        <div class="chart-wrap kpi-scroll"><div class="kpi-chart-inner"><canvas id="kpiVolumeFull"></canvas></div></div>
+                        <div class="kpi-custom-scrollbar" data-for="kpiVolumeFull"><div class="kpi-custom-scroll-thumb"></div></div>
                     </div>
                     <!-- 2. Cierres V vs P -->
                     <div class="chart-card">
                         <h3><i class="fa fa-bars-progress"></i> Cierres (V) vs Contactos (P)</h3>
-                        <div class="chart-wrap"><canvas id="kpiVolumen"></canvas></div>
+                        <div class="kpi-chart-legend" id="legend-kpiVolumen"></div>
+                        <div class="chart-wrap kpi-scroll"><div class="kpi-chart-inner"><canvas id="kpiVolumen"></canvas></div></div>
+                        <div class="kpi-custom-scrollbar" data-for="kpiVolumen"><div class="kpi-custom-scroll-thumb"></div></div>
                     </div>
                     <!-- 3-6. Eficiencia (P → V primero, luego embudo en orden) -->
                     <div class="chart-card">
                         <h3><i class="fa fa-bullseye"></i> Eficiencia: Conversión P ➔ V (Cierre)</h3>
-                        <div class="chart-wrap"><canvas id="kpiEfectividad"></canvas></div>
+                        <div class="kpi-chart-legend" id="legend-kpiEfectividad"></div>
+                        <div class="chart-wrap kpi-scroll"><div class="kpi-chart-inner"><canvas id="kpiEfectividad"></canvas></div></div>
+                        <div class="kpi-custom-scrollbar" data-for="kpiEfectividad"><div class="kpi-custom-scroll-thumb"></div></div>
                     </div>
                     <div class="chart-card">
                         <h3><i class="fa fa-bullseye"></i> Eficiencia: Conversión P ➔ E</h3>
-                        <div class="chart-wrap"><canvas id="kpiRatioEP"></canvas></div>
+                        <div class="kpi-chart-legend" id="legend-kpiRatioEP"></div>
+                        <div class="chart-wrap kpi-scroll"><div class="kpi-chart-inner"><canvas id="kpiRatioEP"></canvas></div></div>
+                        <div class="kpi-custom-scrollbar" data-for="kpiRatioEP"><div class="kpi-custom-scroll-thumb"></div></div>
                     </div>
                     <div class="chart-card">
                         <h3><i class="fa fa-bullseye"></i> Eficiencia: Conversión E ➔ C</h3>
-                        <div class="chart-wrap"><canvas id="kpiRatioCE"></canvas></div>
+                        <div class="kpi-chart-legend" id="legend-kpiRatioCE"></div>
+                        <div class="chart-wrap kpi-scroll"><div class="kpi-chart-inner"><canvas id="kpiRatioCE"></canvas></div></div>
+                        <div class="kpi-custom-scrollbar" data-for="kpiRatioCE"><div class="kpi-custom-scroll-thumb"></div></div>
                     </div>
                     <div class="chart-card">
                         <h3><i class="fa fa-bullseye"></i> Eficiencia: Conversión C ➔ V</h3>
-                        <div class="chart-wrap"><canvas id="kpiRatioVC"></canvas></div>
+                        <div class="kpi-chart-legend" id="legend-kpiRatioVC"></div>
+                        <div class="chart-wrap kpi-scroll"><div class="kpi-chart-inner"><canvas id="kpiRatioVC"></canvas></div></div>
+                        <div class="kpi-custom-scrollbar" data-for="kpiRatioVC"><div class="kpi-custom-scroll-thumb"></div></div>
                     </div>
                     <div class="chart-card">
                         <h3><i class="fa fa-coins"></i> Prima promedio: $/S vs $/V</h3>
-                        <div class="chart-wrap"><canvas id="kpiPrimaPromedios"></canvas></div>
+                        <div class="kpi-chart-legend" id="legend-kpiPrimaPromedios"></div>
+                        <div class="chart-wrap kpi-scroll"><div class="kpi-chart-inner"><canvas id="kpiPrimaPromedios"></canvas></div></div>
+                        <div class="kpi-custom-scrollbar" data-for="kpiPrimaPromedios"><div class="kpi-custom-scroll-thumb"></div></div>
                     </div>
                 </div>
             </div>
@@ -4365,6 +4521,198 @@
             });
         }
 
+        // ─── KPI CHARTS: helpers, plugin, view-mode pills ──────────────────────────
+        // Modos de visualización para los KPI charts.
+        //   'top10' (default), 'top30', 'all', 'foco30', 'foco10'
+        // En "Foco" el orden se invierte: el peor aparece primero (izquierda).
+        let kpiViewMode = 'top10';
+        window.setKpiViewMode = function (mode) {
+            kpiViewMode = mode;
+            document.querySelectorAll('.kpi-pill').forEach(p => {
+                p.classList.toggle('active', p.dataset.mode === mode);
+            });
+            renderKPIs();
+        };
+
+        // Plugin global: copia limites del eje y al eje y1 para que el axis
+        // derecho refleje exactamente la misma escala que el izquierdo.
+        (function registerMirrorYAxisPlugin() {
+            if (!window.Chart || window.__mirrorYAxisRegistered) return;
+            Chart.register({
+                id: 'mirrorYAxis',
+                afterDataLimits: function (chart, args) {
+                    if (!args || !args.scale) return;
+                    if (args.scale.id !== 'y1') return;
+                    const y = chart.scales && chart.scales.y;
+                    if (!y) return;
+                    if (Number.isFinite(y.min)) args.scale.min = y.min;
+                    if (Number.isFinite(y.max)) args.scale.max = y.max;
+                }
+            });
+            window.__mirrorYAxisRegistered = true;
+        })();
+
+        // Aplica configuracion uniforme a las opciones de cada KPI chart:
+        // - Siempre esconde nombres del eje X (tooltip los muestra)
+        // - Desactiva legend nativo (lo manejamos en HTML afuera del scroll)
+        // - isMulti=true => tooltip mode 'index' (muestra todas las barras del set)
+        function _applyKpiTruncate(opts, expanded, isMulti) {
+            const o = { ...opts };
+            o.scales = { ...(opts.scales || {}) };
+            o.scales.x = { ...(opts.scales?.x || {}) };
+            o.scales.x.ticks = { ...(opts.scales?.x?.ticks || {}), display: false };
+            o.plugins = { ...(opts.plugins || {}) };
+            o.plugins.legend = { ...(opts.plugins?.legend || {}), display: false };
+            const tipBase = {
+                ...(opts.plugins?.tooltip || {}),
+                callbacks: {
+                    ...(opts.plugins?.tooltip?.callbacks || {}),
+                    title: function (items) { return items[0]?.label || ''; }
+                }
+            };
+            o.plugins.tooltip = isMulti
+                ? { ...tipBase, mode: 'index', intersect: false }
+                : tipBase;
+            return o;
+        }
+
+        // Setea --bar-count en cada .kpi-chart-inner. CSS usa
+        //   width: max(100%, calc(var(--bar-count) * 50px))
+        // para que sea reactivo al ancho real del padre.
+        function _sizeKpiInners(agentCount) {
+            const ids = ['kpiVolumeFull', 'kpiVolumen', 'kpiEfectividad', 'kpiRatioEP', 'kpiRatioCE', 'kpiRatioVC', 'kpiPrimaPromedios'];
+            ids.forEach(id => {
+                const canvas = document.getElementById(id);
+                if (!canvas) return;
+                const inner = canvas.parentElement;
+                if (inner && inner.classList.contains('kpi-chart-inner')) {
+                    inner.style.setProperty('--bar-count', String(Math.max(1, agentCount)));
+                }
+            });
+        }
+
+        // Scrollbar custom siempre visible: sync con scroll horizontal del
+        // chart-wrap. Soporta drag del thumb + click en el track para jump.
+        // Idempotente — listeners se ataan una sola vez via __kpiScrollbarBound.
+        function _attachKpiScrollbar(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const wrap = canvas.closest('.chart-wrap.kpi-scroll');
+            const card = wrap && wrap.closest('.chart-card');
+            if (!wrap || !card) return;
+            const bar = card.querySelector('.kpi-custom-scrollbar[data-for="' + canvasId + '"]');
+            if (!bar) return;
+            const thumb = bar.querySelector('.kpi-custom-scroll-thumb');
+            if (!thumb) return;
+
+            const update = () => {
+                const inner = wrap.firstElementChild;
+                if (!inner) return;
+                const innerW = inner.scrollWidth || inner.offsetWidth || 0;
+                const wrapW = wrap.clientWidth || 1;
+                const barW = bar.clientWidth || 1;
+                if (innerW <= wrapW + 1) {
+                    thumb.style.width = '100%';
+                    thumb.style.left = '0px';
+                    return;
+                }
+                const ratio = wrapW / innerW;
+                const thumbW = Math.max(28, Math.floor(barW * ratio));
+                const maxLeft = barW - thumbW;
+                const scrollPct = wrap.scrollLeft / (innerW - wrapW);
+                const leftPx = Math.max(0, Math.min(maxLeft, scrollPct * maxLeft));
+                thumb.style.width = thumbW + 'px';
+                thumb.style.left = leftPx + 'px';
+            };
+
+            if (!wrap.__kpiScrollbarBound) {
+                wrap.addEventListener('scroll', update, { passive: true });
+                if (window.ResizeObserver) {
+                    const ro = new ResizeObserver(() => requestAnimationFrame(update));
+                    ro.observe(wrap);
+                    ro.observe(wrap.firstElementChild || wrap);
+                } else {
+                    window.addEventListener('resize', update);
+                }
+                wrap.__kpiScrollbarBound = true;
+            }
+
+            if (!thumb.__dragBound) {
+                let dragging = false, startX = 0, startScroll = 0, barWcache = 0, thumbWcache = 0, innerWcache = 0, wrapWcache = 0;
+                const onDown = (e) => {
+                    dragging = true;
+                    const pt = e.touches ? e.touches[0] : e;
+                    startX = pt.clientX;
+                    startScroll = wrap.scrollLeft;
+                    const inner = wrap.firstElementChild;
+                    innerWcache = (inner && (inner.scrollWidth || inner.offsetWidth)) || 0;
+                    wrapWcache = wrap.clientWidth || 1;
+                    barWcache = bar.clientWidth || 1;
+                    thumbWcache = thumb.offsetWidth || 1;
+                    e.preventDefault();
+                };
+                const onMove = (e) => {
+                    if (!dragging) return;
+                    const pt = e.touches ? e.touches[0] : e;
+                    const dx = pt.clientX - startX;
+                    const trackTravel = Math.max(1, barWcache - thumbWcache);
+                    const scrollableRange = Math.max(0, innerWcache - wrapWcache);
+                    wrap.scrollLeft = startScroll + (dx / trackTravel) * scrollableRange;
+                };
+                const onUp = () => { dragging = false; };
+                thumb.addEventListener('mousedown', onDown);
+                thumb.addEventListener('touchstart', onDown, { passive: false });
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('touchmove', onMove, { passive: true });
+                document.addEventListener('mouseup', onUp);
+                document.addEventListener('touchend', onUp);
+                thumb.__dragBound = true;
+            }
+
+            if (!bar.__trackBound) {
+                bar.addEventListener('click', (e) => {
+                    if (e.target === thumb) return;
+                    const rect = bar.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const inner = wrap.firstElementChild;
+                    const innerW = (inner && (inner.scrollWidth || inner.offsetWidth)) || 0;
+                    const wrapW = wrap.clientWidth || 1;
+                    if (innerW <= wrapW) return;
+                    const pct = clickX / Math.max(1, rect.width);
+                    wrap.scrollLeft = pct * (innerW - wrapW);
+                });
+                bar.__trackBound = true;
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        // Renderiza un legend HTML afuera del scroll horizontal. Cada item es
+        // un boton que toggle-ea la visibilidad del dataset (tachado cuando oculto).
+        function _buildHtmlLegend(chart, legendElId) {
+            const el = document.getElementById(legendElId);
+            if (!el || !chart) return;
+            el.innerHTML = '';
+            chart.data.datasets.forEach((ds, i) => {
+                const meta = chart.getDatasetMeta(i);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'chart-legend-btn' + (meta.hidden ? ' is-hidden' : '');
+                const swatch = document.createElement('span');
+                swatch.className = 'legend-swatch';
+                swatch.style.background = ds.backgroundColor || '#888';
+                btn.appendChild(swatch);
+                btn.appendChild(document.createTextNode(ds.label || ('Dataset ' + i)));
+                btn.addEventListener('click', () => {
+                    const m = chart.getDatasetMeta(i);
+                    m.hidden = m.hidden === null ? !chart.data.datasets[i].hidden : null;
+                    btn.classList.toggle('is-hidden');
+                    chart.update();
+                });
+                el.appendChild(btn);
+            });
+        }
+
         // ─── KPI CHARTS ──────────────────────────────────────────────────────────────
         function renderKPIs() {
             const period = document.getElementById('kpi-period-sel').value;
@@ -4435,15 +4783,38 @@
                 agMap[id].prima += e.totales.prima;
             });
 
-            const agents = Object.keys(agMap); // agentIds
+            let agents = Object.keys(agMap); // agentIds
             agents.sort((a, b) => agMap[b].prima - agMap[a].prima);
+
+            // ─── VISTA: TOP / TODOS / FOCO ─────────────────────────────────────
+            const _totalAgents = agents.length;
+            let mode = kpiViewMode;
+            // Si el modo elegido es top30/foco30 pero no hay >30 agentes, bajamos
+            // a top10/foco10 (las pills de 30 no se muestran).
+            if ((mode === 'top30' || mode === 'foco30') && _totalAgents <= 30) {
+                mode = (mode === 'top30') ? 'top10' : 'foco10';
+            }
+            if (mode === 'top10')      agents = agents.slice(0, 10);
+            else if (mode === 'top30') agents = agents.slice(0, 30);
+            else if (mode === 'foco30') agents = agents.slice(-30).reverse();
+            else if (mode === 'foco10') agents = agents.slice(-10).reverse();
+            // 'all' => sin slicing. slice() tolera arrays mas chicos que N.
+
+            // Pills: top10/all/foco10 siempre visibles; top30/foco30 solo si >30.
+            const _pillVisibility = { top10: true, all: true, foco10: true, top30: _totalAgents > 30, foco30: _totalAgents > 30 };
+            document.querySelectorAll('.kpi-pill').forEach(p => {
+                p.hidden = !_pillVisibility[p.dataset.mode];
+            });
 
             const labels = agents.map(id => agMap[id].name);
             const primas = agents.map(a => agMap[a].prima);
             const Vs = agents.map(a => agMap[a].V);
             const Ps = agents.map(a => agMap[a].P);
-            // Eficiencia P → V en porcentaje (0-100)
             const pvs = agents.map(a => agMap[a].P > 0 ? parseFloat(((agMap[a].V / agMap[a].P) * 100).toFixed(1)) : 0);
+
+            // Always-hide-X-labels + setear --bar-count para el ancho del scroll.
+            const _expanded = true;
+            _sizeKpiInners(agents.length);
 
             destroyChart('kpiVolumen');
             charts['kpiVolumen'] = new Chart(document.getElementById('kpiVolumen').getContext('2d'), {
@@ -4454,15 +4825,19 @@
                         { label: 'Contactos (P)', data: Ps, backgroundColor: CHART_COLORS.P }
                     ]
                 },
-                options: chartOpts('Cantidad')
+                options: _applyKpiTruncate(chartOpts('Cantidad'), _expanded, true)
             });
+            _buildHtmlLegend(charts['kpiVolumen'], 'legend-kpiVolumen');
+            _attachKpiScrollbar('kpiVolumen');
 
             destroyChart('kpiEfectividad');
             charts['kpiEfectividad'] = new Chart(document.getElementById('kpiEfectividad').getContext('2d'), {
                 type: 'bar',
                 data: { labels, datasets: [{ label: 'Eficiencia P → V', data: pvs, backgroundColor: CHART_COLORS.P }] },
-                options: chartOptsPct()
+                options: _applyKpiTruncate(chartOptsPct(), _expanded, false)
             });
+            _buildHtmlLegend(charts['kpiEfectividad'], 'legend-kpiEfectividad');
+            _attachKpiScrollbar('kpiEfectividad');
 
             // Volumen Full PECVS
             const dataP = agents.map(a => agMap[a].P);
@@ -4483,8 +4858,10 @@
                         { label: 'S', data: dataS, backgroundColor: CHART_COLORS.S }
                     ]
                 },
-                options: chartOpts('Cantidad Unidades')
+                options: _applyKpiTruncate(chartOpts('Cantidad Unidades'), _expanded, true)
             });
+            _buildHtmlLegend(charts['kpiVolumeFull'], 'legend-kpiVolumeFull');
+            _attachKpiScrollbar('kpiVolumeFull');
 
             // Ratios de Embudo (en porcentaje 0-100)
             const ratios = [
@@ -4499,8 +4876,10 @@
                 charts[r.id] = new Chart(document.getElementById(r.id).getContext('2d'), {
                     type: 'bar',
                     data: { labels, datasets: [{ label: r.label, data: data, backgroundColor: r.color }] },
-                    options: chartOptsPct()
+                    options: _applyKpiTruncate(chartOptsPct(), _expanded, false)
                 });
+                _buildHtmlLegend(charts[r.id], 'legend-' + r.id);
+                _attachKpiScrollbar(r.id);
             });
 
             // Prima promedio: $/S vs $/V por agente
@@ -4516,12 +4895,15 @@
                         { label: 'Prima por Venta ($/V)', data: primaPerV, backgroundColor: CHART_COLORS.V }
                     ]
                 },
-                options: chartOptsDollar()
+                options: _applyKpiTruncate(chartOptsDollar(), _expanded, true)
             });
+            _buildHtmlLegend(charts['kpiPrimaPromedios'], 'legend-kpiPrimaPromedios');
+            _attachKpiScrollbar('kpiPrimaPromedios');
         }
 
         // chartOpts especial para gráficas con montos en pesos $
         function chartOptsDollar() {
+            const fmt = (v) => '$' + v.toLocaleString('es-MX');
             return {
                 responsive: true, maintainAspectRatio: false,
                 plugins: {
@@ -4531,9 +4913,16 @@
                 scales: {
                     x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
                     y: {
+                        position: 'left',
                         grid: { color: 'rgba(255,255,255,.05)' },
-                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => '$' + v.toLocaleString('es-MX') },
+                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: fmt },
                         title: { display: true, text: 'Prima ($)', color: '#94a3b8', font: { size: 10 } },
+                        beginAtZero: true
+                    },
+                    y1: {
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: fmt },
                         beginAtZero: true
                     }
                 }
@@ -4542,6 +4931,7 @@
 
         // chartOpts especial para gráficas de % (formatea ticks y tooltip con sufijo %)
         function chartOptsPct() {
+            const fmt = (v) => v + '%';
             return {
                 responsive: true, maintainAspectRatio: false,
                 plugins: {
@@ -4551,9 +4941,16 @@
                 scales: {
                     x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
                     y: {
+                        position: 'left',
                         grid: { color: 'rgba(255,255,255,.05)' },
-                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => v + '%' },
+                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: fmt },
                         title: { display: true, text: '% Eficiencia', color: '#94a3b8', font: { size: 10 } },
+                        beginAtZero: true
+                    },
+                    y1: {
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: fmt },
                         beginAtZero: true
                     }
                 }
@@ -4566,7 +4963,19 @@
                 plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } } },
                 scales: {
                     x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
-                    y: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } }, title: { display: true, text: yLabel, color: '#94a3b8', font: { size: 10 } } }
+                    y: {
+                        position: 'left',
+                        grid: { color: 'rgba(255,255,255,.05)' },
+                        ticks: { color: '#94a3b8', font: { size: 10 } },
+                        title: { display: true, text: yLabel, color: '#94a3b8', font: { size: 10 } },
+                        beginAtZero: true
+                    },
+                    y1: {
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#94a3b8', font: { size: 10 } },
+                        beginAtZero: true
+                    }
                 }
             };
         }
