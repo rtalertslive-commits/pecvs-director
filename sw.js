@@ -1,5 +1,5 @@
 // Versión sincronizada con index.html (era 'director-hub-v2.2.1' inconsistente con v1.0.0 del HTML)
-const CACHE_NAME = 'pecvs-director-mainnet-v2.0.1';
+const CACHE_NAME = 'pecvs-director-mainnet-v2.1.0';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {
