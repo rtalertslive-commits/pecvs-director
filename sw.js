@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pecvs-director-mainnet-v2.3.1';
+const CACHE_NAME = 'pecvs-director-mainnet-v2.3.2';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {

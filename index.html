@@ -5857,8 +5857,15 @@
             container.innerHTML = filtered.map(m => {
                 const safeEmail = escapeHtml(m.email);
                 const eid = m.email.replace(/[@.+]/g, '_');
+                // Botón "+ Coach" solo aplica si:
+                //   - el miembro es promotor
+                //   - no existe ya un doc de coach con su mismo email
+                const _alreadyHasCoach = !!state.coachesMap[m.email];
+                const _selfCoachBtn = (m.role === 'promoter' && !_alreadyHasCoach)
+                    ? `<button class="btn btn-sm" onclick="createSelfCoachFromPromoter('${safeEmail}')" title="Crear cuenta de coach con la misma clave/email" style="background:rgba(6,182,212,0.12); color:var(--teal); border:1px solid rgba(6,182,212,0.3);"><i class="fa fa-user-plus"></i> + Coach</button>`
+                    : '';
                 return `
-                <div style="display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.02); border-radius:8px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.06);">
+                <div style="display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.02); border-radius:8px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.06);">
                     <div>
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
                             <input id="name-inp-${eid}" value="${escapeHtml(m.name)}" placeholder="Nombre" style="font-weight:600; font-size:13px; width:190px; padding:5px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:var(--white);">
@@ -5877,6 +5884,7 @@
                             <select id="assign-inp-${eid}" data-role="${m.role}" style="min-width:230px; max-width:300px; font-size:12px; padding:4px 8px; color:var(--teal); background:rgba(6,182,212,0.06); border:1px solid rgba(6,182,212,0.2); border-radius:6px;">${buildAssignOptions(m.role, m.assignCode)}</select>
                         </div>
                     </div>
+                    ${_selfCoachBtn}
                     <button class="btn btn-green btn-sm" onclick="saveMemberChanges('${safeEmail}','${m.role}')">
                         <i class="fa fa-save"></i> Guardar
                     </button>
@@ -7016,48 +7024,41 @@
         // tienda functions already assigned to window.* at definition (no re-assignment needed)
         window.chartOpts = chartOpts;
 
-        // ─── ADMIN: crear cuenta de coach desde un promotor existente ───────────────
-        // Util cuando un usuario ya se registro como promotor y quiere ademas
-        // ser su propio coach (para que sus agentes le reporten directamente).
+        // ─── Crear cuenta de coach desde un promotor existente (self-coach) ─────────
+        // Util cuando un promotor ademas quiere ser su propio coach (para que sus
+        // agentes le reporten directamente). Se llama desde el boton "+ Coach" que
+        // aparece en cada fila de promotor en la pestaña Gestion.
         // Espeja /promoters/{email} -> /coaches/{email}, con
         // promotorTeamCode = su propia companyCode (self-promoter).
-        //
-        // Uso desde consola del navegador, logueado como director:
-        //   await __adminCreateSelfCoach('lapromotoria54@gmail.com')
-        //
-        // Devuelve los datos creados o null si fallo / ya existia.
-        window.__adminCreateSelfCoach = async function (promoterEmail) {
-            if (!promoterEmail) {
-                console.error('❌ Falta el email del promotor.');
-                return null;
-            }
+        window.createSelfCoachFromPromoter = async function (promoterEmail) {
+            if (!promoterEmail) return;
             promoterEmail = String(promoterEmail).trim().toLowerCase();
             const user = auth.currentUser;
-            if (!user) {
-                console.error('❌ No hay sesion. Logueate primero como director.');
-                return null;
+            if (!user) { alert('No hay sesion. Volve a iniciar sesion.'); return; }
+            const prom = state.promotersMap[promoterEmail];
+            if (!prom) { alert('Promotor no encontrado: ' + promoterEmail); return; }
+            const code = prom.companyCode || prom.promotorCode || '';
+            if (!code) { alert('El promotor no tiene companyCode definido.'); return; }
+            if (state.coachesMap[promoterEmail]) {
+                alert('Ya existe una cuenta de coach para este email.');
+                return;
             }
+            const name = prom.promoterName || prom.name || promoterEmail;
+            const ok = confirm(
+                `¿Crear cuenta de coach para ${name}?\n\n` +
+                `Email: ${promoterEmail}\n` +
+                `Clave: ${code}\n` +
+                `Bajo promotor: ${name} (él mismo)\n\n` +
+                `Su cuenta de promotor NO se toca.`
+            );
+            if (!ok) return;
             try {
-                const promRef = doc(db, 'promoters', promoterEmail);
-                const promSnap = await getDoc(promRef);
-                if (!promSnap.exists()) {
-                    console.error('❌ Promotor no encontrado en /promoters/' + promoterEmail);
-                    return null;
-                }
-                const prom = promSnap.data();
-                console.log('📋 Promotor encontrado:', prom);
-                const coachRef = doc(db, 'coaches', promoterEmail);
-                const coachSnap = await getDoc(coachRef);
-                if (coachSnap.exists()) {
-                    console.warn('⚠️ Ya existe doc de coach para ' + promoterEmail + ':', coachSnap.data());
-                    return null;
-                }
                 const coachData = {
-                    coachName: prom.promoterName || prom.name || '',
+                    coachName: name,
                     email: promoterEmail,
-                    companyCode: prom.companyCode,
-                    teamCode: prom.companyCode,         // agentes se linkean via este
-                    promotorTeamCode: prom.companyCode, // self-promoter (su propio jefe)
+                    companyCode: code,
+                    teamCode: code,           // agentes se linkean via este
+                    promotorTeamCode: code,   // self-promoter (él es su propio jefe)
                     directorCode: prom.directorCode || state.directorCode || '',
                     regionName: prom.regionName || state.regionName || '',
                     status: 'active',
@@ -7065,17 +7066,13 @@
                     approvedBy: user.email,
                     approvedAt: new Date().toISOString()
                 };
-                await setDoc(coachRef, coachData);
-                console.log('✅ Coach creado exitosamente:');
-                console.log('   - Nombre:', coachData.coachName);
-                console.log('   - Email:', coachData.email);
-                console.log('   - Clave (companyCode):', coachData.companyCode);
-                console.log('   - promotorTeamCode (self):', coachData.promotorTeamCode);
-                console.log('   - directorCode:', coachData.directorCode);
-                return coachData;
+                await setDoc(doc(db, 'coaches', promoterEmail), coachData);
+                alert(`✅ Coach creado: ${name} (clave ${code}).`);
+                // El listener onSnapshot debe refrescar state.coaches automaticamente;
+                // forzamos render por si tarda en propagarse.
+                setTimeout(() => { try { renderGestionAll(); } catch(e){} }, 300);
             } catch (err) {
-                console.error('❌ Error creando coach:', err.message || err);
-                return null;
+                alert('Error al crear coach: ' + (err.message || err));
             }
         };
 
