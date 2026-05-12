@@ -5857,13 +5857,16 @@
             container.innerHTML = filtered.map(m => {
                 const safeEmail = escapeHtml(m.email);
                 const eid = m.email.replace(/[@.+]/g, '_');
-                // Botón "+ Coach" solo aplica si:
-                //   - el miembro es promotor
-                //   - no existe ya un doc de coach con su mismo email
+                // Botón "+ Coach" aplica para:
+                //   - promotores → crea coach con promotorTeamCode = su propia clave (self)
+                //   - agentes    → crea coach con promotorTeamCode = el promotor de su coach actual
+                // En ambos casos: no aparece si ya existe doc de coach con su mismo email.
                 const _alreadyHasCoach = !!state.coachesMap[m.email];
-                const _selfCoachBtn = (m.role === 'promoter' && !_alreadyHasCoach)
-                    ? `<button class="btn btn-sm" onclick="createSelfCoachFromPromoter('${safeEmail}')" title="Crear cuenta de coach con la misma clave/email" style="background:rgba(6,182,212,0.12); color:var(--teal); border:1px solid rgba(6,182,212,0.3);"><i class="fa fa-user-plus"></i> + Coach</button>`
-                    : '';
+                let _selfCoachBtn = '';
+                if (!_alreadyHasCoach && (m.role === 'promoter' || m.role === 'agent')) {
+                    const _fn = m.role === 'promoter' ? 'createSelfCoachFromPromoter' : 'createSelfCoachFromAgent';
+                    _selfCoachBtn = `<button class="btn btn-sm" onclick="${_fn}('${safeEmail}')" title="Crear cuenta de coach con la misma clave/email" style="background:rgba(6,182,212,0.12); color:var(--teal); border:1px solid rgba(6,182,212,0.3);"><i class="fa fa-user-plus"></i> + Coach</button>`;
+                }
                 return `
                 <div style="display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.02); border-radius:8px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.06);">
                     <div>
@@ -7024,12 +7027,39 @@
         // tienda functions already assigned to window.* at definition (no re-assignment needed)
         window.chartOpts = chartOpts;
 
-        // ─── Crear cuenta de coach desde un promotor existente (self-coach) ─────────
-        // Util cuando un promotor ademas quiere ser su propio coach (para que sus
-        // agentes le reporten directamente). Se llama desde el boton "+ Coach" que
-        // aparece en cada fila de promotor en la pestaña Gestion.
-        // Espeja /promoters/{email} -> /coaches/{email}, con
-        // promotorTeamCode = su propia companyCode (self-promoter).
+        // ─── Crear cuenta de coach desde un miembro existente (helper común) ───────
+        // Verifica conflictos de clave en /coaches/ dentro del mismo director,
+        // y escribe el doc bajo /coaches/{email}. No toca la cuenta original.
+        async function _createCoachDocFor({ email, name, code, promotorTeamCode, directorCode, regionName, approverEmail }) {
+            // Conflicto de clave: otra coach activa con misma companyCode bajo el mismo director
+            const codeConflict = (state.coaches || []).find(c =>
+                c.status !== 'inactive' &&
+                String(c.companyCode || c.agentTeamCode || '') === String(code) &&
+                String(c.directorCode || '') === String(directorCode) &&
+                c.email !== email
+            );
+            if (codeConflict) {
+                alert(`⚠️ La clave ${code} ya está siendo usada por otro coach: ${codeConflict.coachName || codeConflict.email}.\n\nUsa una clave distinta o pídele al usuario que se registre con clave diferente.`);
+                return null;
+            }
+            const coachData = {
+                coachName: name,
+                email,
+                companyCode: code,
+                teamCode: code,            // agentes se linkean via este
+                promotorTeamCode,
+                directorCode: directorCode || '',
+                regionName: regionName || '',
+                status: 'active',
+                type: 'coach',
+                approvedBy: approverEmail,
+                approvedAt: new Date().toISOString()
+            };
+            await setDoc(doc(db, 'coaches', email), coachData);
+            return coachData;
+        }
+
+        // Promotor -> self-coach: el nuevo coach es su propio jefe (promotorTeamCode = su companyCode).
         window.createSelfCoachFromPromoter = async function (promoterEmail) {
             if (!promoterEmail) return;
             promoterEmail = String(promoterEmail).trim().toLowerCase();
@@ -7053,23 +7083,68 @@
             );
             if (!ok) return;
             try {
-                const coachData = {
-                    coachName: name,
+                const created = await _createCoachDocFor({
                     email: promoterEmail,
-                    companyCode: code,
-                    teamCode: code,           // agentes se linkean via este
-                    promotorTeamCode: code,   // self-promoter (él es su propio jefe)
+                    name,
+                    code,
+                    promotorTeamCode: code, // self-promoter
                     directorCode: prom.directorCode || state.directorCode || '',
                     regionName: prom.regionName || state.regionName || '',
-                    status: 'active',
-                    type: 'coach',
-                    approvedBy: user.email,
-                    approvedAt: new Date().toISOString()
-                };
-                await setDoc(doc(db, 'coaches', promoterEmail), coachData);
+                    approverEmail: user.email
+                });
+                if (!created) return;
                 alert(`✅ Coach creado: ${name} (clave ${code}).`);
-                // El listener onSnapshot debe refrescar state.coaches automaticamente;
-                // forzamos render por si tarda en propagarse.
+                setTimeout(() => { try { renderGestionAll(); } catch(e){} }, 300);
+            } catch (err) {
+                alert('Error al crear coach: ' + (err.message || err));
+            }
+        };
+
+        // Agente -> coach: el nuevo coach queda bajo el mismo promotor que su coach actual.
+        // Su cuenta de /users/ (agente) NO se toca — puede seguir reportando bitácora.
+        window.createSelfCoachFromAgent = async function (agentEmail) {
+            if (!agentEmail) return;
+            agentEmail = String(agentEmail).trim().toLowerCase();
+            const user = auth.currentUser;
+            if (!user) { alert('No hay sesion. Volve a iniciar sesion.'); return; }
+            const agent = (state.agents || []).find(a => a.email === agentEmail);
+            if (!agent) { alert('Agente no encontrado: ' + agentEmail); return; }
+            const code = agent.companyCode || '';
+            if (!code) { alert('El agente no tiene companyCode definido.'); return; }
+            if (state.coachesMap[agentEmail]) {
+                alert('Ya existe una cuenta de coach para este email.');
+                return;
+            }
+            // Heredar el promotor del coach actual del agente
+            const details = state.agentDetails && state.agentDetails[agentEmail];
+            const promCode = details?.promotorTeamCode || '';
+            if (!promCode) {
+                alert('No se pudo determinar el promotor del agente (su coach no tiene promotorTeamCode). Reasigna su coach primero o crea la cuenta desde el flujo de aprobación.');
+                return;
+            }
+            const prom = (state.promoters || []).find(p => String(p.companyCode || p.promotorCode || '') === String(promCode));
+            const promName = prom?.promoterName || `clave ${promCode}`;
+            const name = agent.name || agentEmail;
+            const ok = confirm(
+                `¿Crear cuenta de coach para ${name}?\n\n` +
+                `Email: ${agentEmail}\n` +
+                `Clave: ${code}\n` +
+                `Bajo promotor: ${promName} (mismo que su coach actual)\n\n` +
+                `Su cuenta de agente NO se toca.`
+            );
+            if (!ok) return;
+            try {
+                const created = await _createCoachDocFor({
+                    email: agentEmail,
+                    name,
+                    code,
+                    promotorTeamCode: promCode,
+                    directorCode: state.directorCode || '',
+                    regionName: state.regionName || '',
+                    approverEmail: user.email
+                });
+                if (!created) return;
+                alert(`✅ Coach creado: ${name} (clave ${code}).`);
                 setTimeout(() => { try { renderGestionAll(); } catch(e){} }, 300);
             } catch (err) {
                 alert('Error al crear coach: ' + (err.message || err));
