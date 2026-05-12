@@ -7016,6 +7016,69 @@
         // tienda functions already assigned to window.* at definition (no re-assignment needed)
         window.chartOpts = chartOpts;
 
+        // ─── ADMIN: crear cuenta de coach desde un promotor existente ───────────────
+        // Util cuando un usuario ya se registro como promotor y quiere ademas
+        // ser su propio coach (para que sus agentes le reporten directamente).
+        // Espeja /promoters/{email} -> /coaches/{email}, con
+        // promotorTeamCode = su propia companyCode (self-promoter).
+        //
+        // Uso desde consola del navegador, logueado como director:
+        //   await __adminCreateSelfCoach('lapromotoria54@gmail.com')
+        //
+        // Devuelve los datos creados o null si fallo / ya existia.
+        window.__adminCreateSelfCoach = async function (promoterEmail) {
+            if (!promoterEmail) {
+                console.error('❌ Falta el email del promotor.');
+                return null;
+            }
+            promoterEmail = String(promoterEmail).trim().toLowerCase();
+            const user = auth.currentUser;
+            if (!user) {
+                console.error('❌ No hay sesion. Logueate primero como director.');
+                return null;
+            }
+            try {
+                const promRef = doc(db, 'promoters', promoterEmail);
+                const promSnap = await getDoc(promRef);
+                if (!promSnap.exists()) {
+                    console.error('❌ Promotor no encontrado en /promoters/' + promoterEmail);
+                    return null;
+                }
+                const prom = promSnap.data();
+                console.log('📋 Promotor encontrado:', prom);
+                const coachRef = doc(db, 'coaches', promoterEmail);
+                const coachSnap = await getDoc(coachRef);
+                if (coachSnap.exists()) {
+                    console.warn('⚠️ Ya existe doc de coach para ' + promoterEmail + ':', coachSnap.data());
+                    return null;
+                }
+                const coachData = {
+                    coachName: prom.promoterName || prom.name || '',
+                    email: promoterEmail,
+                    companyCode: prom.companyCode,
+                    teamCode: prom.companyCode,         // agentes se linkean via este
+                    promotorTeamCode: prom.companyCode, // self-promoter (su propio jefe)
+                    directorCode: prom.directorCode || state.directorCode || '',
+                    regionName: prom.regionName || state.regionName || '',
+                    status: 'active',
+                    type: 'coach',
+                    approvedBy: user.email,
+                    approvedAt: new Date().toISOString()
+                };
+                await setDoc(coachRef, coachData);
+                console.log('✅ Coach creado exitosamente:');
+                console.log('   - Nombre:', coachData.coachName);
+                console.log('   - Email:', coachData.email);
+                console.log('   - Clave (companyCode):', coachData.companyCode);
+                console.log('   - promotorTeamCode (self):', coachData.promotorTeamCode);
+                console.log('   - directorCode:', coachData.directorCode);
+                return coachData;
+            } catch (err) {
+                console.error('❌ Error creando coach:', err.message || err);
+                return null;
+            }
+        };
+
         // ─── TESORERÍA ─────────────────────────────────────────────────────────────────
         // Cache de usuarios cargados (para no re-fetchear en cada filtro/render)
         let _tesUsers = []; // [{ email, name, role, balance, earned, spent, burned, log }]
