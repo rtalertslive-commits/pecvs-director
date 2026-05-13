@@ -4814,8 +4814,9 @@
             const leadingEmpty = DAYS.indexOf(firstDayName); // 0=Lunes ... 6=Domingo
 
             // Entries del agente para este mes
+            // Defensivo: aceptar agent name O agentId (apps con refactor agentId).
             const entriesThisMonth = (state.entries || []).filter(e =>
-                e.agent === _calCurrentAgent && e.mes === mesStr
+                ((e.agent === _calCurrentAgent) || (e.agentId === _calCurrentAgent)) && e.mes === mesStr
             );
 
             // Map: dayDate -> {dia, status}
