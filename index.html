@@ -7941,8 +7941,8 @@
                             ${descHtml}
                         </div>
                         <div style="text-align:right;">
-                            <div style="font-size:10px;color:var(--slate);text-transform:uppercase;letter-spacing:1px;">Total a comprar</div>
-                            <div style="font-size:24px;font-weight:800;color:var(--gold);">${info.count} unidad${info.count === 1 ? '' : 'es'}</div>
+                            <div style="font-size:10px;color:var(--slate);text-transform:uppercase;letter-spacing:1px;">Faltan por entregar</div>
+                            <div style="font-size:24px;font-weight:800;color:${info.entregados === info.count ? 'var(--green)' : 'var(--gold)'};">${info.count - info.entregados} unidad${(info.count - info.entregados) === 1 ? '' : 'es'}</div>
                             <div style="font-size:10px;color:${info.entregados === info.count ? 'var(--green)' : 'var(--slate)'};margin-top:2px;">${info.entregados}/${info.count} entregados</div>
                         </div>
                     </div>
