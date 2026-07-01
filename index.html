@@ -7843,13 +7843,14 @@
                     descripcion: (r.itemId != null ? (_premiosDescById[r.itemId] || '') : ''),
                     count: 0, entregados: 0, emoji: r.emoji || '🎁', canjes: []
                 };
-                bucket.items[itemKey].count += 1;
+                const qty = Number(r.cantidad) || 1;
+                bucket.items[itemKey].count += qty;
                 const agentName = r.nombreSolicitante || r.emailSolicitante || '?';
-                if (r.entregado) bucket.items[itemKey].entregados += 1;
+                if (r.entregado) bucket.items[itemKey].entregados += qty;
                 bucket.items[itemKey].canjes.push({
                     id: r._id,
                     agentName,
-                    qty: Number(r.cantidad) || 1,
+                    qty,
                     entregado: !!r.entregado
                 });
                 bucket.agentes.add(agentName);
@@ -7916,12 +7917,13 @@
                     descripcion: (r.itemId != null ? (_premiosDescById[r.itemId] || '') : ''),
                     count: 0, entregados: 0, emoji: r.emoji || '🎁', byCoach: {}
                 };
-                byItem[itemKey].count += 1;
-                if (r.entregado) byItem[itemKey].entregados += 1;
+                const qty = Number(r.cantidad) || 1;
+                byItem[itemKey].count += qty;
+                if (r.entregado) byItem[itemKey].entregados += qty;
                 const coachKey = r.coachTeamCode || 'sin-coach';
                 const coach = (state.coaches || []).find(c => (c.companyCode || c.agentTeamCode) === coachKey);
                 const coachName = coach ? (coach.coachName || coach.email) : `(sin coach · clave ${coachKey})`;
-                byItem[itemKey].byCoach[coachName] = (byItem[itemKey].byCoach[coachName] || 0) + 1;
+                byItem[itemKey].byCoach[coachName] = (byItem[itemKey].byCoach[coachName] || 0) + qty;
             });
             const itemList = Object.entries(byItem).sort((a,b) => b[1].count - a[1].count);
             return itemList.map(([key, info]) => {
