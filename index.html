@@ -7875,7 +7875,10 @@
                                     <span style="${doneStyle}">${escapeHtml(cj.agentName)}${qtyStr}</span>${badge}
                                 </label>`;
                             }).join('');
-                        const entregadosColor = info.entregados === info.count ? 'var(--green)' : 'var(--slate)';
+                        const allDone = info.entregados === info.count;
+                        const pendientes = info.count - info.entregados;
+                        const entregadosColor = allDone ? 'var(--green)' : 'var(--slate)';
+                        const pendColor = allDone ? 'var(--green)' : 'var(--gold)';
                         return `<div style="padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:6px;">
                             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
                                 <div style="flex:1;">
@@ -7883,7 +7886,7 @@
                                     ${descHtml}
                                 </div>
                                 <div style="text-align:right;flex:none;">
-                                    <div style="font-size:18px;font-weight:800;color:var(--gold);">× ${info.count}</div>
+                                    <div style="font-size:18px;font-weight:800;color:${pendColor};">× ${pendientes}</div>
                                     <div style="font-size:10px;color:${entregadosColor};">${info.entregados}/${info.count} entregados</div>
                                 </div>
                             </div>
@@ -7891,6 +7894,9 @@
                         </div>`;
                     }).join('');
                 const totalPremios = Object.values(c.items).reduce((s, i) => s + i.count, 0);
+                const totalEntregados = Object.values(c.items).reduce((s, i) => s + i.entregados, 0);
+                const totalPendientes = totalPremios - totalEntregados;
+                const totalAllDone = totalPendientes === 0;
                 return `<div style="background:var(--panel2);border:1px solid rgba(212,175,55,0.15);border-radius:10px;padding:14px;">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
                         <div>
@@ -7898,8 +7904,9 @@
                             <div style="font-size:11px;color:var(--slate);">bajo 📊 ${escapeHtml(c.promotorName)} · ${c.agentes.size} agente${c.agentes.size === 1 ? '' : 's'} con canjes</div>
                         </div>
                         <div style="text-align:right;">
-                            <div style="font-size:10px;color:var(--slate);text-transform:uppercase;letter-spacing:1px;">Premios</div>
-                            <div style="font-size:24px;font-weight:800;color:var(--gold);">${totalPremios}</div>
+                            <div style="font-size:10px;color:var(--slate);text-transform:uppercase;letter-spacing:1px;">Faltan por entregar</div>
+                            <div style="font-size:24px;font-weight:800;color:${totalAllDone ? 'var(--green)' : 'var(--gold)'};">${totalPendientes}</div>
+                            <div style="font-size:10px;color:${totalAllDone ? 'var(--green)' : 'var(--slate)'};margin-top:2px;">${totalEntregados}/${totalPremios} entregados</div>
                         </div>
                     </div>
                     ${itemsHtml}
