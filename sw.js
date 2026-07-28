@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pecvs-director-mainnet-v2.16.1';
+const CACHE_NAME = 'pecvs-director-mainnet-v2.17.0';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -19,6 +19,12 @@ self.addEventListener('activate', (event) => {
 });
 
 // NETWORK FIRST APPROACH - FORCES FRESH FETCH
+// Timeout de red. Sin esto, un fetch colgado (señal mala, torre saturada,
+// captive portal) deja al SW sin responder — y el splash nativo del PWA se
+// queda en pantalla hasta que el browser aborta solo (30-120s).
+// Con 4s servimos cache y la app abre al instante; la próxima carga trae fresh.
+const NAV_TIMEOUT_MS = 4000;
+
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
 
@@ -27,8 +33,19 @@ self.addEventListener('fetch', (event) => {
     const url = event.request.url;
     if (!url.startsWith('http')) return;
 
-    event.respondWith(
-        fetch(event.request, { cache: 'no-store' }).then((response) => {
+    event.respondWith((async () => {
+        // Preparamos el fallback ANTES de la carrera.
+        const cached = (await caches.match(event.request))
+            || (event.request.mode === 'navigate'
+                ? (await caches.match('./index.html')) || (await caches.match('./'))
+                : null);
+
+        try {
+            const response = await Promise.race([
+                fetch(event.request, { cache: 'no-store' }),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('sw-timeout')), NAV_TIMEOUT_MS))
+            ]);
             // No cachear responses non-ok ni opaqueredirect (evita ERR_BLOCKED_BY_CLIENT)
             if (!response || !response.ok || response.type === 'opaqueredirect') {
                 return response;
@@ -39,8 +56,12 @@ self.addEventListener('fetch', (event) => {
                 cache.put(event.request, respClone).catch(() => {});
             }).catch(() => {});
             return response;
-        }).catch(() => {
-            return caches.match(event.request);
-        })
-    );
+        } catch (err) {
+            // Timeout o fallo de red → cache si lo tenemos.
+            if (cached) return cached;
+            // Sin cache: reintento sin timeout para que el browser muestre
+            // su error de red real en vez de colgarse indefinidamente.
+            return fetch(event.request);
+        }
+    })());
 });
