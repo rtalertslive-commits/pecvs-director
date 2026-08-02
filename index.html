@@ -2419,8 +2419,10 @@
                 <div class="foro-tabs" id="dforo-tabs" style="padding:0 0 12px;"></div>
                 <div id="dforo-body"></div>
             </div>
+        </div>
 
 
+        <!-- ═══════════════════ TAB: GESTIÓN DE EQUIPO ═══════════════════ -->
         <div id="tab-gestion" class="tab-panel">
             <!-- Chip único compacto: "Agentes: X registrados | Y activos (7d)" -->
             <div id="gestion-counters" style="margin-bottom:14px;">
@@ -3318,7 +3320,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.21.0';
+        window.APP_HTML_VERSION = 'v2.22.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9824,7 +9826,28 @@
                     set('mult-t4-min',  d.multTier4Min ?? 0);
                     set('mult-t4-pct',  d.multTier4Pct ?? 0);
                 }
-            } catch(e) {}
+            } catch(e) { console.warn('[puntos] load:', e); }
+            _bindMultCfgInputs();
+            _renderMultCfgPreview();
+        }
+
+        // El script es type="module": un oninput inline no ve estas funciones.
+        // Listeners reales, con guard para no duplicarlos en cada initTienda.
+        let _multCfgBound = false;
+        function _bindMultCfgInputs() {
+            if (_multCfgBound) return;
+            const ids = ['pts-agent','mult-margin','mult-t1-min','mult-t1-pct',
+                         'mult-t2-min','mult-t2-pct','mult-t3-min','mult-t3-pct',
+                         'mult-t4-min','mult-t4-pct'];
+            let found = 0;
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                found++;
+                el.addEventListener('input',  _renderMultCfgPreview);
+                el.addEventListener('change', _renderMultCfgPreview);
+            });
+            if (found === ids.length) _multCfgBound = true;
         }
 
         // Catalog CRUD
