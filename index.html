@@ -3321,7 +3321,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.23.0';
+        window.APP_HTML_VERSION = 'v2.24.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9413,10 +9413,28 @@
                 return (m === 12 ? MONTHS_ES[0] : MONTHS_ES[m]) || '';
             })();
 
+            // El desvio se mostraba con Math.round: 10.1945% salia como "10%",
+            // o sea EXACTAMENTE el margen, y se leia como si hubiera cabido y el
+            // calculo estuviera mal. Se muestran los decimales necesarios para
+            // que el numero impreso sea estrictamente mayor que el margen.
+            const pctDesvio = (d, margen) => {
+                for (let dec = 1; dec <= 3; dec++) {
+                    const s = (d * 100).toFixed(dec);
+                    if (parseFloat(s) > margen * 100) return s;
+                }
+                return (d * 100).toFixed(3);
+            };
+
             const motivo = r => {
                 if (r.reason === 'sin-csv')      return '<span style="color:var(--slate);">No aparece en el CSV</span>';
                 if (r.reason === 'escalon')      return `<span style="color:var(--orange);">No alcanzó el escalón</span> <span style="color:var(--slate);">(mín ${money(r.tierMin)})</span>`;
-                if (r.reason === 'coincidencia') return `<span style="color:var(--red);">No coincidió</span> <span style="color:var(--slate);">(${Math.round(r.desvio*100)}% de desvío)</span>`;
+                if (r.reason === 'coincidencia') {
+                    // El tope contesta la pregunta que sigue: "y entonces cuanto
+                    // debio reportar". Sin el, el director no puede explicarselo
+                    // al agente sin sacar la calculadora.
+                    const tope = Math.floor((r.ingresado || 0) * (1 + cfg.margin));
+                    return `<span style="color:var(--red);">No coincidió</span> <span style="color:var(--slate);">(${pctDesvio(r.desvio, cfg.margin)}% de desvío · tope ${money(tope)})</span>`;
+                }
                 return '';
             };
 
