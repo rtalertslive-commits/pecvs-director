@@ -2618,6 +2618,66 @@
                     </div>
                 </div>
 
+                <!-- ── MULTIPLICADOR POR COINCIDENCIA ── -->
+                <div class="card">
+                    <p class="card-title"><i class="fa fa-bolt"></i> Multiplicador por Coincidencia</p>
+                    <p style="font-size:12px;color:var(--slate);margin-bottom:6px;line-height:1.55;">
+                        Se gana en un mes y se cobra en el siguiente. Para activarlo el agente necesita que
+                        lo <b>reportado en la app coincida</b> con lo ingresado según el corporativo, y alcanzar
+                        un escalón de producción.
+                    </p>
+                    <p style="font-size:12px;color:var(--slate);margin-bottom:18px;line-height:1.55;">
+                        La fuerza del escalón se escala por los días que reportó:
+                        <code style="background:rgba(212,175,55,0.12);padding:2px 6px;border-radius:3px;">bonus × (días reportados ÷ días del mes)</code>
+                    </p>
+
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px;">
+                        <div>
+                            <label class="field-label">Margen de error permitido (%)</label>
+                            <input type="number" id="mult-margin" min="0" max="100" class="form-input" value="10">
+                        </div>
+                    </div>
+
+                    <p style="font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Escalones por prima ingresada en el mes</p>
+                    <p style="font-size:11.5px;color:var(--slate);margin-bottom:12px;line-height:1.55;">
+                        Debajo del primer escalón el día vale la base y no hay multiplicador. Los escalones
+                        2 y 3 caen sobre bonos reales de Promessa ($8,000 y $10,000) para que el agente
+                        persiga un solo objetivo.
+                        <b>Un escalón en 0 queda apagado</b> — el 4º está libre por si más adelante quieren otro tramo.
+                    </p>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px;">
+                        <div>
+                            <label class="field-label">Escalón 1 — desde $</label>
+                            <input type="number" id="mult-t1-min" min="0" class="form-input" value="5000">
+                            <label class="field-label" style="margin-top:8px;">Bonus (%)</label>
+                            <input type="number" id="mult-t1-pct" min="0" class="form-input" value="50">
+                        </div>
+                        <div>
+                            <label class="field-label">Escalón 2 — desde $</label>
+                            <input type="number" id="mult-t2-min" min="0" class="form-input" value="8000">
+                            <label class="field-label" style="margin-top:8px;">Bonus (%)</label>
+                            <input type="number" id="mult-t2-pct" min="0" class="form-input" value="100">
+                        </div>
+                        <div>
+                            <label class="field-label">Escalón 3 — desde $</label>
+                            <input type="number" id="mult-t3-min" min="0" class="form-input" value="10000">
+                            <label class="field-label" style="margin-top:8px;">Bonus (%)</label>
+                            <input type="number" id="mult-t3-pct" min="0" class="form-input" value="200">
+                        </div>
+                        <div>
+                            <label class="field-label">Escalón 4 — desde $ <span style="opacity:0.6;font-weight:400;">(libre)</span></label>
+                            <input type="number" id="mult-t4-min" min="0" class="form-input" value="0">
+                            <label class="field-label" style="margin-top:8px;">Bonus (%)</label>
+                            <input type="number" id="mult-t4-pct" min="0" class="form-input" value="0">
+                        </div>
+                    </div>
+
+                    <div id="mult-preview-cfg" style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.22);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:var(--slate);line-height:1.7;"></div>
+
+                    <button class="btn btn-green" onclick="savePuntosConfig()"><i class="fa fa-floppy-disk"></i> Guardar configuración</button>
+                    <span id="mult-msg" style="display:none;font-size:12px;color:var(--green);margin-left:10px;"><i class="fa fa-check"></i> Guardado</span>
+                </div>
+
                 <!-- ── CHECADOR DE PRIMA (reportado en app vs ingresado en sistema) ── -->
                 <div class="card">
                     <p class="card-title" onclick="toggleChecador()" style="cursor:pointer;user-select:none;">
@@ -2646,7 +2706,11 @@
                                 <input type="file" id="checador-file" accept=".csv,text/csv" onchange="handleChecadorFile(this)" style="font-size:12px;">
                             </div>
                             <button class="btn btn-sm" onclick="renderChecador()" style="background:var(--gold);color:#000;font-weight:700;"><i class="fa fa-check-double"></i> Verificar</button>
+                            <button class="btn btn-sm" onclick="previewMultipliers()" style="background:var(--gold); color:#000;">
+                                <i class="fa fa-bolt"></i> Ver quién gana multiplicador
+                            </button>
                         </div>
+                        <div id="mult-grant-box" style="display:none;margin-bottom:16px;"></div>
                         <div id="checador-summary" style="display:none;margin-bottom:16px;"></div>
                         <div id="checador-results"></div>
                     </div>
@@ -8771,10 +8835,503 @@
         };
 
         // Puntos config
+        // ═══ MULTIPLICADOR POR COINCIDENCIA ══════════════════════════════════════════
+        // Se calcula sobre el mes evaluado y se otorga para el mes SIGUIENTE.
+        // El karma del agente se otorga al día siguiente de cada día, así que
+        // corriendo esto el día 1 cada día del mes nuevo ya nace sabiendo su valor.
+        let _multRows = null;
+
+        function _nextMonthKey(mes) {
+            const parts = String(mes).trim().split(' ');
+            const m = MONTHS_ES.indexOf(parts[0]) + 1;
+            const y = parseInt(parts[1]);
+            if (!m || !y) return null;
+            return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+        }
+
+        // Días del mes que ganaron totopos, por agente. Misma regla que usa el
+        // karma en la app del agente: 🌙 cuenta, 🔴 y ⚪ no. Set sobre el día del
+        // mes para que un día repetido en dos semanas no se cuente dos veces.
+        function _coverageByEmail(mes) {
+            const parts = String(mes).trim().split(' ');
+            const m = MONTHS_ES.indexOf(parts[0]) + 1;
+            const y = parseInt(parts[1]);
+            const cal = getMonthCalendar(y, m);
+            const sets = {};
+            (state.entries || []).forEach(e => {
+                if ((e.mes || '').trim() !== String(mes).trim()) return;
+                const weekDays = cal[parseInt(e.semana) - 1] || [];
+                if (!sets[e.agentId]) sets[e.agentId] = new Set();
+                (e.dias || []).forEach(d => {
+                    const info = weekDays.find(w => w.dayName === d.dia);
+                    if (!info) return;
+                    const sum = (Number(d.P)||0)+(Number(d.E)||0)+(Number(d.C)||0)+(Number(d.V)||0)+(Number(d.S)||0);
+                    const hasData = sum > 0 || (parseFloat(d.prima) || 0) > 0;
+                    const ok = d.sinActividad === true || (hasData && validateDay(d).ok);
+                    if (ok) sets[e.agentId].add(info.date);
+                });
+            });
+            const days = {};
+            Object.keys(sets).forEach(k => { days[k] = sets[k].size; });
+            return { days, daysInMonth: new Date(y, m, 0).getDate() };
+        }
+
+        function _computeMultipliers(mes) {
+            const cfg = _multCfg();
+            const { byCode } = _reportedPrimaByCode(mes);
+            const csvByCode = {};
+            (_checadorRows || []).forEach(r => { csvByCode[r.aso] = r; });
+            const cov = _coverageByEmail(mes);
+            const monthKey = _nextMonthKey(mes);
+            const minTier = cfg.tiers[cfg.tiers.length - 1].min;
+
+            const emailByCode = {};
+            (state.agents || []).forEach(a => {
+                const c = String(a.companyCode || '').trim();
+                if (c) emailByCode[c] = a.email;
+            });
+
+            const rows = [];
+            Object.keys(byCode).forEach(code => {
+                const email = emailByCode[code];
+                if (!email) return;
+                const rep = byCode[code].prima;
+                const csv = csvByCode[code];
+                const daysReported = cov.days[email] || 0;
+                const daysInMonth  = cov.daysInMonth;
+                const coverage     = daysInMonth ? daysReported / daysInMonth : 0;
+                const b = {
+                    code, email, name: byCode[code].name,
+                    promotorName: byCode[code].promotorName || '',
+                    promotorCode: byCode[code].promotorCode || '',
+                    reportado: rep, daysReported, daysInMonth, coverage,
+                    month: monthKey, basedOn: String(mes).trim()
+                };
+                if (!csv) { rows.push({ ...b, ingresado: 0, earned: false, reason: 'sin-csv' }); return; }
+                const ing = csv.ingresado;
+                // El desvío se mide contra lo INGRESADO: el número del corporativo
+                // es el ancla, no lo que el agente escribió.
+                const desvio = ing > 0 ? Math.abs(rep - ing) / ing : (rep > 0 ? 1 : 0);
+                const tier = _tierFor(ing, cfg);
+                if (!tier) { rows.push({ ...b, ingresado: ing, desvio, earned: false, reason: 'escalon', tierMin: minTier }); return; }
+                if (desvio > cfg.margin) { rows.push({ ...b, ingresado: ing, desvio, tierPct: tier.pct, earned: false, reason: 'coincidencia' }); return; }
+                const bonusPct = Math.round(tier.pct * coverage);
+                rows.push({ ...b, ingresado: ing, desvio, tierPct: tier.pct, bonusPct, earned: true,
+                            dayValue: Math.round(cfg.base * (1 + bonusPct / 100)) });
+            });
+            rows.sort((a, b2) => (b2.bonusPct || 0) - (a.bonusPct || 0));
+            return { rows, cfg, monthKey };
+        }
+
+        // Preview obligatorio: esto escribe en decenas de docs de agentes.
+        // Nunca se otorga sin que el director vea antes quién gana y quién no.
+        window.previewMultipliers = function() {
+            const mes = document.getElementById('checador-mes').value;
+            const box = document.getElementById('mult-grant-box');
+            if (!mes) { alert('Elige el mes a evaluar.'); return; }
+            if (!_checadorRows) { alert('Sube primero el archivo CSV del sistema.'); return; }
+
+            const { rows, cfg, monthKey } = _computeMultipliers(mes);
+            _multRows = rows;
+            if (!rows.length) {
+                box.style.display = 'block';
+                box.innerHTML = `<div class="card" style="border-color:var(--red);"><p style="color:var(--slate);font-size:13px;margin:0;">No hay agentes con clave para evaluar en ${mes}.</p></div>`;
+                return;
+            }
+
+            const ganan = rows.filter(r => r.earned);
+            const money = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-MX');
+            const mesSig = (() => {
+                const p = String(mes).trim().split(' ');
+                const m = MONTHS_ES.indexOf(p[0]) + 1;
+                return (m === 12 ? MONTHS_ES[0] : MONTHS_ES[m]) || '';
+            })();
+
+            const motivo = r => {
+                if (r.reason === 'sin-csv')      return '<span style="color:var(--slate);">No aparece en el CSV</span>';
+                if (r.reason === 'escalon')      return `<span style="color:var(--orange);">No alcanzó el escalón</span> <span style="color:var(--slate);">(mín ${money(r.tierMin)})</span>`;
+                if (r.reason === 'coincidencia') return `<span style="color:var(--red);">No coincidió</span> <span style="color:var(--slate);">(${Math.round(r.desvio*100)}% de desvío)</span>`;
+                return '';
+            };
+
+            box.style.display = 'block';
+            box.innerHTML = `
+              <div class="card" style="border-color:rgba(16,185,129,0.4);">
+                <p class="card-title"><i class="fa fa-bolt"></i> Multiplicadores de ${mesSig} — vista previa</p>
+                <p style="font-size:12px;color:var(--slate);margin-bottom:14px;">
+                  Evaluando <b>${mes}</b> · margen ${Math.round(cfg.margin*100)}% ·
+                  <b style="color:var(--green);">${ganan.length}</b> de ${rows.length} agentes obtienen multiplicador.
+                  Todavía no se guardó nada.
+                </p>
+                <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead><tr style="text-align:left;color:var(--slate);border-bottom:1px solid rgba(255,255,255,0.12);">
+                    <th style="padding:7px 8px;">Agente</th>
+                    <th style="padding:7px 8px;">Promotor</th>
+                    <th style="padding:7px 8px;text-align:right;">Reportado</th>
+                    <th style="padding:7px 8px;text-align:right;">Ingresado</th>
+                    <th style="padding:7px 8px;text-align:right;">Días</th>
+                    <th style="padding:7px 8px;text-align:right;">Resultado</th>
+                  </tr></thead>
+                  <tbody>
+                  ${rows.map(r => `
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.06);${r.earned ? '' : 'opacity:0.72;'}">
+                      <td style="padding:7px 8px;"><b>${r.name}</b><br><span style="color:var(--slate);font-size:10px;">${r.code}</span></td>
+                      <td style="padding:7px 8px;color:var(--slate);">${r.promotorName || '—'}</td>
+                      <td style="padding:7px 8px;text-align:right;">${money(r.reportado)}</td>
+                      <td style="padding:7px 8px;text-align:right;">${money(r.ingresado)}</td>
+                      <td style="padding:7px 8px;text-align:right;">${r.daysReported}/${r.daysInMonth}<br><span style="color:var(--slate);font-size:10px;">${Math.round(r.coverage*100)}%</span></td>
+                      <td style="padding:7px 8px;text-align:right;">
+                        ${r.earned
+                          ? `<b style="color:var(--green);">+${r.bonusPct}%</b><br><span style="color:var(--slate);font-size:10px;">día vale ${r.dayValue}</span>`
+                          : motivo(r)}
+                      </td>
+                    </tr>`).join('')}
+                  </tbody>
+                </table>
+                </div>
+                <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                  <button class="btn btn-green" onclick="grantMultipliers()"><i class="fa fa-check"></i> Otorgar a los ${rows.length} agentes</button>
+                  <button class="btn btn-sm" onclick="document.getElementById('mult-grant-box').style.display='none';">Cancelar</button>
+                  <span id="mult-grant-msg" style="font-size:12px;color:var(--slate);"></span>
+                </div>
+              </div>`;
+        };
+
+        window.grantMultipliers = function() {
+            if (!_multRows || !_multRows.length) { alert('Calcula primero la vista previa.'); return; }
+            const rows = _multRows;
+            const msg = document.getElementById('mult-grant-msg');
+            const ganan = rows.filter(r => r.earned).length;
+            if (!confirm(`Se van a escribir ${rows.length} multiplicadores (${ganan} activos).\n\nEsto reemplaza el multiplicador anterior de cada agente. ¿Continuar?`)) return;
+
+            (async () => {
+                let okCount = 0, errCount = 0;
+                for (const r of rows) {
+                    const mult = {
+                        month: r.month, basedOn: r.basedOn,
+                        earned: !!r.earned,
+                        reason: r.earned ? null : (r.reason || null),
+                        tierPct: r.tierPct || 0,
+                        bonusPct: r.earned ? r.bonusPct : 0,
+                        tierMin: r.tierMin || 0,
+                        coverage: Number((r.coverage || 0).toFixed(4)),
+                        daysReported: r.daysReported || 0,
+                        daysInMonth: r.daysInMonth || 0,
+                        reportado: Math.round(r.reportado || 0),
+                        ingresado: Math.round(r.ingresado || 0),
+                        desvio: Number((r.desvio || 0).toFixed(4)),
+                        grantedAt: new Date().toISOString(),
+                        grantedBy: (auth.currentUser && auth.currentUser.email) || 'director'
+                    };
+                    try {
+                        await setDoc(doc(db, 'users', r.email), { multiplier: mult }, { merge: true });
+                        okCount++;
+                    } catch (e) { console.error('[mult] grant', r.email, e); errCount++; }
+                    if (msg) msg.textContent = `Guardando… ${okCount + errCount}/${rows.length}`;
+                }
+                if (msg) msg.innerHTML = errCount
+                    ? `<span style="color:var(--red);">Listo con ${errCount} error(es). ${okCount} guardados.</span>`
+                    : `<span style="color:var(--green);"><i class="fa fa-check"></i> ${okCount} multiplicadores otorgados.</span>`;
+            })();
+        };
+
+        window.renderChecador = function() {
+            const mes = document.getElementById('checador-mes').value;
+            const summary = document.getElementById('checador-summary');
+            const results = document.getElementById('checador-results');
+            if (!mes) { alert('Elige el mes a corroborar.'); return; }
+            if (!_checadorRows) { alert('Sube el archivo CSV del sistema.'); return; }
+
+            const promotorFilter = document.getElementById('checador-promotor')?.value || '';
+
+            const { byCode } = _reportedPrimaByCode(mes);
+            const csvByCode = {};
+            _checadorRows.forEach(r => { csvByCode[r.aso] = r; });
+
+            const flagged = [], ok = [], reportoCero = [], appSinCsv = [], csvSinApp = [];
+
+            // Recorrer agentes del app (los que tienen clave). Cada row lleva promotorName/Code.
+            Object.keys(byCode).forEach(code => {
+                const rep = byCode[code].prima;
+                const name = byCode[code].name;
+                const promotorName = byCode[code].promotorName || '';
+                const promotorCode = byCode[code].promotorCode || '';
+                const csv = csvByCode[code];
+                if (!csv) { appSinCsv.push({ code, name, rep, promotorName, promotorCode }); return; }
+                const ing = csv.ingresado;
+                if (rep === 0) { reportoCero.push({ code, name, rep, ing, promotorName, promotorCode }); return; }
+                const lower = rep * 0.9, upper = rep * 1.1;
+                const diffPct = ((ing - rep) / rep) * 100;
+                const row = { code, name, rep, ing, diffPct, promotorName, promotorCode };
+                if (ing < lower || ing > upper) flagged.push(row); else ok.push(row);
+            });
+            // ASO en el CSV que no existe en el app — no tenemos promotor conocido para estos.
+            _checadorRows.forEach(r => { if (!byCode[r.aso]) csvSinApp.push({ ...r, promotorName: '', promotorCode: '' }); });
+
+            flagged.sort((a, b) => Math.abs(b.diffPct) - Math.abs(a.diffPct));
+
+            const money = n => '$' + (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const pct = n => (n >= 0 ? '+' : '') + n.toFixed(1) + '%';
+
+            // Filtro por promotor: '' = todos, '__none__' = sin promotor asignado.
+            // Se aplica ANTES del summary y del render de secciones, para que todo
+            // (contadores, cards, tablas) refleje solo el subconjunto elegido.
+            const matchPromotor = (row) => {
+                if (!promotorFilter) return true;
+                if (promotorFilter === '__none__') return !row.promotorCode;
+                return row.promotorCode === promotorFilter;
+            };
+            const fFlagged     = flagged.filter(matchPromotor);
+            const fOk          = ok.filter(matchPromotor);
+            const fReportoCero = reportoCero.filter(matchPromotor);
+            const fAppSinCsv   = appSinCsv.filter(matchPromotor);
+            // csvSinApp no tiene promotor (no está en la app). Ocultarlo si hay filtro activo.
+            const fCsvSinApp   = promotorFilter ? [] : csvSinApp;
+
+            summary.style.display = 'block';
+            summary.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
+                    <div style="background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;">
+                        <div style="font-size:10px;color:var(--slate);text-transform:uppercase;">🚩 Flageados</div>
+                        <div style="font-size:24px;font-weight:800;color:#ef4444;">${fFlagged.length}</div>
+                    </div>
+                    <div style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:12px;">
+                        <div style="font-size:10px;color:var(--slate);text-transform:uppercase;">✅ OK (±10%)</div>
+                        <div style="font-size:24px;font-weight:800;color:var(--green);">${fOk.length}</div>
+                    </div>
+                    <div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;">
+                        <div style="font-size:10px;color:var(--slate);text-transform:uppercase;">⚠️ Reportó cero</div>
+                        <div style="font-size:24px;font-weight:800;color:#f59e0b;">${fReportoCero.length}</div>
+                    </div>
+                    <div style="background:rgba(59,130,246,0.10);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:12px;">
+                        <div style="font-size:10px;color:var(--slate);text-transform:uppercase;">🔵 En app, sin CSV</div>
+                        <div style="font-size:24px;font-weight:800;color:#3b82f6;">${fAppSinCsv.length}</div>
+                    </div>
+                    <div style="background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.3);border-radius:10px;padding:12px;">
+                        <div style="font-size:10px;color:var(--slate);text-transform:uppercase;">🟣 En CSV, sin registrar</div>
+                        <div style="font-size:24px;font-weight:800;color:#a855f7;">${fCsvSinApp.length}</div>
+                    </div>
+                </div>`;
+
+            // ═══ SOBRE-REPORTADO — reportaron en app > ingresado en CSV ═══
+            // Deriva de datos existentes: flagged con ing<rep + appSinCsv con rep>0.
+            // Sin threshold (cualquier exceso reportado califica). Los mismos rows
+            // también aparecen abajo en sus secciones originales (Flagged/AppSinCsv)
+            // — esta sección solo los junta para acción inmediata del promotor.
+            const sobreReportado = [
+                ...flagged.filter(r => r.ing < r.rep),
+                ...appSinCsv.filter(r => r.rep > 0).map(r => ({ ...r, ing: 0, diffPct: -100 }))
+            ]
+                .filter(matchPromotor)
+                .sort((a, b) => (b.rep - b.ing) - (a.rep - a.ing));
+
+            // ═══ TABLAS DETALLE AGRUPADAS POR PROMOTOR (B) ═══
+            // Cada sección ahora se divide en subheaders por promotor.
+            const tbl = (rows, cols) => `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead><tr style="text-align:left;color:var(--slate);border-bottom:1px solid rgba(255,255,255,0.1);">
+                    ${cols.map(c => `<th style="padding:6px 8px;">${c}</th>`).join('')}
+                </tr></thead><tbody>${rows}</tbody></table>`;
+
+            // Agrupa rows por promotor y devuelve HTML con subheaders.
+            const groupByPromotor = (rows, buildRow, cols, subHeaderColor) => {
+                const groups = {};
+                rows.forEach(r => {
+                    const k = r.promotorCode || '__none__';
+                    if (!groups[k]) groups[k] = { promotorName: r.promotorName || '— Sin promotor —', rows: [] };
+                    groups[k].rows.push(r);
+                });
+                const groupList = Object.values(groups).sort((a, b) =>
+                    b.rows.length - a.rows.length || a.promotorName.localeCompare(b.promotorName));
+                return groupList.map(g => `
+                    <div style="margin:10px 0 6px;padding:6px 10px;background:rgba(255,255,255,0.03);border-left:3px solid ${subHeaderColor};border-radius:4px;font-size:11px;font-weight:700;color:${subHeaderColor};">
+                        ${escapeHtml(g.promotorName)} <span style="color:var(--slate);font-weight:500;">(${g.rows.length})</span>
+                    </div>
+                    ${tbl(g.rows.map(buildRow).join(''), cols)}
+                `).join('');
+            };
+
+            let html = '';
+            // 📤 SOBRE-REPORTADO — acción del promotor
+            if (sobreReportado.length) {
+                const buildRow = r => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 8px;font-weight:600;">${escapeHtml(r.name)}</td>
+                    <td style="padding:6px 8px;color:var(--slate);">${escapeHtml(r.code)}</td>
+                    <td style="padding:6px 8px;">${money(r.rep)}</td>
+                    <td style="padding:6px 8px;">${money(r.ing)}</td>
+                    <td style="padding:6px 8px;font-weight:700;color:#f97316;">${money(r.rep - r.ing)}</td>
+                </tr>`;
+                const cols = ['Agente', 'Clave', 'Reportado', 'Ingresado', 'Falta ingresar'];
+                html += `<div style="margin:6px 0 8px;padding:12px 14px;background:rgba(249,115,22,0.10);border:1px solid rgba(249,115,22,0.35);border-radius:8px;">
+                    <div style="font-size:14px;font-weight:700;color:#f97316;margin-bottom:2px;">📤 Reportaron pero no han ingresado — ${sobreReportado.length}</div>
+                    <div style="font-size:11px;color:var(--slate);">Producción que el agente declaró en la app pero que aún no aparece (o aparece por menos) en el CSV del sistema. Manda al promotor a corregir.</div>
+                </div>` +
+                    (promotorFilter ? tbl(sobreReportado.map(buildRow).join(''), cols) : groupByPromotor(sobreReportado, buildRow, cols, '#f97316'));
+            }
+            // 🚩 Flageados
+            if (fFlagged.length) {
+                const buildRow = r => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 8px;font-weight:600;">${escapeHtml(r.name)}</td>
+                    <td style="padding:6px 8px;color:var(--slate);">${escapeHtml(r.code)}</td>
+                    <td style="padding:6px 8px;">${money(r.rep)}</td>
+                    <td style="padding:6px 8px;">${money(r.ing)}</td>
+                    <td style="padding:6px 8px;font-weight:700;color:#ef4444;">${pct(r.diffPct)}</td>
+                </tr>`;
+                const cols = ['Agente', 'Clave', 'Reportado', 'Ingresado', 'Diferencia'];
+                html += `<h4 style="margin:18px 0 8px;color:#ef4444;">🚩 Flageados (>±10%) — ${fFlagged.length}</h4>` +
+                    (promotorFilter ? tbl(fFlagged.map(buildRow).join(''), cols) : groupByPromotor(fFlagged, buildRow, cols, '#ef4444'));
+            }
+            // ⚠️ Reportó cero
+            if (fReportoCero.length) {
+                const buildRow = r => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 8px;font-weight:600;">${escapeHtml(r.name)}</td>
+                    <td style="padding:6px 8px;color:var(--slate);">${escapeHtml(r.code)}</td>
+                    <td style="padding:6px 8px;">${money(r.ing)}</td>
+                </tr>`;
+                const cols = ['Agente', 'Clave', 'Ingresado (CSV)'];
+                html += `<h4 style="margin:18px 0 8px;color:#f59e0b;">⚠️ Reportó cero en la app pero tiene prima ingresada — ${fReportoCero.length}</h4>` +
+                    (promotorFilter ? tbl(fReportoCero.map(buildRow).join(''), cols) : groupByPromotor(fReportoCero, buildRow, cols, '#f59e0b'));
+            }
+            // 🟣 En CSV, sin registrar (no tiene promotor conocido — no se agrupa)
+            if (fCsvSinApp.length) {
+                const body = fCsvSinApp.map(r => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 8px;font-weight:600;">${escapeHtml(r.nombre || '—')}</td>
+                    <td style="padding:6px 8px;color:var(--slate);">${escapeHtml(r.aso)}</td>
+                    <td style="padding:6px 8px;">${money(r.ingresado)}</td>
+                </tr>`).join('');
+                html += `<h4 style="margin:18px 0 8px;color:#a855f7;">🟣 En el CSV pero no registrados en la app — ${fCsvSinApp.length}</h4>` +
+                    tbl(body, ['Nombre (CSV)', 'Clave', 'Ingresado']);
+            }
+            // 🔵 En app, sin CSV
+            if (fAppSinCsv.length) {
+                const buildRow = r => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 8px;font-weight:600;">${escapeHtml(r.name)}</td>
+                    <td style="padding:6px 8px;color:var(--slate);">${escapeHtml(r.code)}</td>
+                    <td style="padding:6px 8px;">${money(r.rep)}</td>
+                </tr>`;
+                const cols = ['Agente', 'Clave', 'Reportado'];
+                html += `<h4 style="margin:18px 0 8px;color:#3b82f6;">🔵 Registrados en la app pero ausentes del CSV — ${fAppSinCsv.length}</h4>` +
+                    (promotorFilter ? tbl(fAppSinCsv.map(buildRow).join(''), cols) : groupByPromotor(fAppSinCsv, buildRow, cols, '#3b82f6'));
+            }
+            // ✅ OK (colapsado en <details>)
+            if (fOk.length) {
+                const buildRow = r => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 8px;font-weight:600;">${escapeHtml(r.name)}</td>
+                    <td style="padding:6px 8px;color:var(--slate);">${escapeHtml(r.code)}</td>
+                    <td style="padding:6px 8px;">${money(r.rep)}</td>
+                    <td style="padding:6px 8px;">${money(r.ing)}</td>
+                    <td style="padding:6px 8px;color:var(--green);">${pct(r.diffPct)}</td>
+                </tr>`;
+                const cols = ['Agente', 'Clave', 'Reportado', 'Ingresado', 'Diferencia'];
+                const inner = promotorFilter ? tbl(fOk.map(buildRow).join(''), cols) : groupByPromotor(fOk, buildRow, cols, '#10b981');
+                html += `<details style="margin-top:18px;"><summary style="cursor:pointer;color:var(--green);font-weight:600;">✅ OK dentro de ±10% — ${fOk.length} (click para ver)</summary>${inner}</details>`;
+            }
+            results.innerHTML = html || '<div class="empty-state">Sin resultados.</div>';
+        };
+
+        window.switchCatRole = function(role) {
+            currentCatRole = role;
+            ['agente','coach','promotor'].forEach(r => {
+                const btn = document.getElementById('cat-btn-' + r);
+                if (!btn) return;
+                const active = r === role;
+                btn.style.background = active ? (r==='agente'?'var(--blue)':r==='coach'?'var(--teal)':'var(--orange)') : '';
+                btn.style.color = active ? '#fff' : '';
+                btn.style.fontWeight = active ? '700' : '';
+            });
+            const labels = { agente: 'Agentes', coach: 'Coaches', promotor: 'Promotores' };
+            const lbl = document.getElementById('cat-role-label');
+            if (lbl) lbl.textContent = labels[role];
+            loadCatalog(role).then(renderCatalogItems);
+        };
+
+
+        function _multCfg() {
+            // Un escalón en 0 está APAGADO. Filtrarlo es obligatorio, no cosmético:
+            // _tierFor busca el primero cuyo min se cumpla, y un min=0 haría match
+            // con cualquier producción — le daría a todos el pct de ese escalón
+            // (normalmente 0) y rompería el cálculo entero.
+            const tiers = [
+                { min: _numVal('mult-t1-min', 0), pct: _numVal('mult-t1-pct', 0) },
+                { min: _numVal('mult-t2-min', 0), pct: _numVal('mult-t2-pct', 0) },
+                { min: _numVal('mult-t3-min', 0), pct: _numVal('mult-t3-pct', 0) },
+                { min: _numVal('mult-t4-min', 0), pct: _numVal('mult-t4-pct', 0) }
+            ].filter(t => t.min > 0 && t.pct > 0)
+             .sort((a, b) => b.min - a.min);   // de mayor a menor: el primero que cumpla gana
+            return {
+                base:   _numVal('pts-agent', 10),
+                margin: _numVal('mult-margin', 10) / 100,
+                tiers
+            };
+        }
+        function _tierFor(ingresado, cfg) {
+            return (cfg.tiers.find(t => ingresado >= t.min) || null);
+        }
+
+        // Traduce la config a totopos por día, que es la unidad que entiende el agente.
+        function _renderMultCfgPreview() {
+            const el = document.getElementById('mult-preview-cfg');
+            if (!el) return;
+            const cfg = _multCfg();
+            const money = n => '$' + Math.round(n).toLocaleString('es-MX');
+            // Ascendente y con rangos, igual que la tabla que ve el agente.
+            // La primera fila es "menos del piso": sin ella no se entiende que
+            // la base son 10 y que el escalón es lo que se le suma encima.
+            const asc = cfg.tiers.slice().reverse();
+            const escala = [{ min: 0, max: asc[0].min - 1, pct: 0 }].concat(
+                asc.map((t, i) => ({ min: t.min, max: asc[i + 1] ? asc[i + 1].min - 1 : null, pct: t.pct }))
+            );
+            const rows = escala.map(t => {
+                const off = t.pct === 0;
+                const rango = off ? `menos de ${money(asc[0].min)}`
+                    : (t.max === null ? `${money(t.min)} o más` : `${money(t.min)} — ${money(t.max)}`);
+                return `<tr style="${off ? 'opacity:0.6;' : ''}">
+                    <td style="padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.06);">${rango}</td>
+                    <td style="padding:7px 10px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.06); font-variant-numeric:tabular-nums;">${off ? '—' : '+' + t.pct + ' %'}</td>
+                    <td style="padding:7px 10px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.06); font-weight:800; font-size:14px; font-variant-numeric:tabular-nums; color:${off ? 'var(--slate)' : 'var(--gold)'};">${Math.round(cfg.base * (1 + t.pct / 100))}</td>
+                </tr>`;
+            }).join('');
+            el.innerHTML = `
+                <div style="font-size:10.5px;color:var(--slate);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Escalones — según lo ingresado en el mes</div>
+                <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.14);color:var(--slate);">
+                    <th style="text-align:left;padding:0 10px 7px;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:500;">Prima ingresada en el mes</th>
+                    <th style="text-align:right;padding:0 10px 7px;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:500;">Bonus</th>
+                    <th style="text-align:right;padding:0 10px 7px;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:500;">Vale el día</th>
+                  </tr></thead>
+                  <tbody>${rows}</tbody>
+                </table>
+                </div>
+                <div style="margin-top:9px;font-size:11.5px;opacity:0.8;">
+                    Asume que el agente reportó el mes completo. Con menos días, el bonus se reduce en proporción.
+                </div>`;
+        }
+
+        // Lee un numero de un campo de la pantalla, con valor por omision si el
+        // campo no existe o trae basura.
+        const _numVal = (id, def) => {
+            const el = document.getElementById(id);
+            const n = el ? parseInt(el.value) : NaN;
+            return Number.isFinite(n) ? n : def;
+        };
+
         window.savePuntosConfig = async function() {
             const cfg = {
                 agentDailyPoints:    parseInt(document.getElementById('pts-agent').value)   || 10,
                 coachReportPoints:   parseInt(document.getElementById('pts-coach').value)   || 500,
+                // Multiplicador por coincidencia. Los nombres tienen que coincidir
+                // EXACTO con los que lee _tiersFromConfig en la app del agente, o
+                // los escalones configurados aqui no llegan alla.
+                multMargin:   _numVal('mult-margin', 10),
+                multTier1Min: _numVal('mult-t1-min', 5000),
+                multTier1Pct: _numVal('mult-t1-pct', 50),
+                multTier2Min: _numVal('mult-t2-min', 8000),
+                multTier2Pct: _numVal('mult-t2-pct', 100),
+                multTier3Min: _numVal('mult-t3-min', 10000),
+                multTier3Pct: _numVal('mult-t3-pct', 200),
+                multTier4Min: _numVal('mult-t4-min', 0),
+                multTier4Pct: _numVal('mult-t4-pct', 0),
                 promotorReportPoints:parseInt(document.getElementById('pts-promotor').value)|| 1000
             };
             await setDoc(doc(db, 'config', 'pointsConfig'), cfg, { merge: true });
@@ -8790,6 +9347,19 @@
                     const a = document.getElementById('pts-agent');   if (a) a.value = d.agentDailyPoints    || 10;
                     const c = document.getElementById('pts-coach');   if (c) c.value = d.coachReportPoints   || 500;
                     const p = document.getElementById('pts-promotor');if (p) p.value = d.promotorReportPoints|| 1000;
+                    // Escalones del multiplicador. Se usa `set` en vez de repetir
+                    // el patron nueve veces; los campos pueden no existir todavia
+                    // si el panel de puntos no se ha abierto.
+                    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+                    set('mult-margin',  d.multMargin   ?? 10);
+                    set('mult-t1-min',  d.multTier1Min ?? 5000);
+                    set('mult-t1-pct',  d.multTier1Pct ?? 50);
+                    set('mult-t2-min',  d.multTier2Min ?? 8000);
+                    set('mult-t2-pct',  d.multTier2Pct ?? 100);
+                    set('mult-t3-min',  d.multTier3Min ?? 10000);
+                    set('mult-t3-pct',  d.multTier3Pct ?? 200);
+                    set('mult-t4-min',  d.multTier4Min ?? 0);
+                    set('mult-t4-pct',  d.multTier4Pct ?? 0);
                 }
             } catch(e) {}
         }
