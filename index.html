@@ -317,15 +317,19 @@
         @media (max-width: 767px) {
             .tab-nav { display: none; }
             body { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+        /* SIN backdrop-filter aqui. Sobre un fondo opaco el desenfoque no se
+           ve —esta difuminando algo que ya esta tapado— pero fuerza a la
+           barra a su propia capa de composicion, y eso es justo lo que
+           despega los position:fixed en Safari de iOS: durante el scroll por
+           inercia la barra se queda flotando a media pantalla en vez de
+           pegada abajo. Se quita el filtro y el fondo va opaco. */
             .bottom-nav {
                 display: flex;
                 position: fixed;
                 bottom: 0; left: 0; right: 0;
-                background: rgba(2, 6, 23, 0.92);
+                background: rgba(2, 6, 23, 1);
                 border-top: 1px solid var(--border);
                 padding: 8px 4px calc(10px + env(safe-area-inset-bottom, 0px));
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px);
                 z-index: 100;
             }
         }
@@ -3345,7 +3349,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.27.0';
+        window.APP_HTML_VERSION = 'v2.27.1';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
