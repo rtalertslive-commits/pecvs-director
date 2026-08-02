@@ -3311,19 +3311,76 @@
 
 
     <script>
-        // Sync versión de la app desde sw.js (single source of truth).
-        (async () => {
+        // Version HORNEADA en este archivo. Tiene que coincidir con CACHE_NAME
+        // en sw.js.
+        //
+        // Antes esto leia la version desde ./sw.js por RED, asi que mostraba la
+        // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
+        // en cache el header decia una version y corria otra, y era imposible
+        // darse cuenta de estar desactualizado.
+        window.APP_HTML_VERSION = 'v2.21.0';
+
+        // Escape hatch manual: tocar el numero de version fuerza la
+        // actualizacion. Borra SOLO las entradas de navegacion del cache, no
+        // todo — purgar el cache completo deja la app en pantalla negra si la
+        // red esta lenta.
+        window.forzarActualizacion = async function () {
+            document.querySelectorAll('[data-app-version]').forEach(el => { el.textContent = 'buscando…'; });
             try {
-                const r = await fetch('./sw.js', { cache: 'no-cache' });
-                const text = await r.text();
-                const match = text.match(/CACHE_NAME\s*=\s*['"`][^'"`]*?v(\d+\.\d+\.\d+)['"`]/);
-                if (!match) return;
-                const v = 'v' + match[1];
-                document.title = 'PECVS$ — Director Analytics ' + v;
+                if (window.caches) {
+                    for (const n of await caches.keys()) {
+                        const c = await caches.open(n);
+                        await c.delete('./');
+                        await c.delete('./index.html');
+                        await c.delete(location.href.split('#')[0].split('?')[0]);
+                    }
+                }
+            } catch (e) { console.warn('[version] cache:', e); }
+            try { sessionStorage.removeItem('pecvsAutoReloadFor'); } catch (e) {}
+            location.replace(location.pathname + '?v=' + Date.now());
+        };
+
+        (async () => {
+            const RUNNING = window.APP_HTML_VERSION;
+            const paint = (txt, warn) => {
                 document.querySelectorAll('[data-app-version]').forEach(el => {
-                    el.textContent = v;
+                    el.textContent = txt;
+                    el.style.cursor = 'pointer';
+                    el.title = 'Toca para buscar actualización';
+                    el.onclick = window.forzarActualizacion;
+                    if (warn) { el.style.color = '#FFC72C'; el.style.fontWeight = '700'; }
                 });
-            } catch (e) {}
+            };
+            document.title = 'PECVS$ — Director Analytics ' + RUNNING;
+            paint(RUNNING, false);
+
+            try {
+                const r = await fetch('./sw.js', { cache: 'no-store' });
+                const match = (await r.text()).match(/CACHE_NAME\s*=\s*['"`][^'"`]*?v(\d+\.\d+\.\d+)['"`]/);
+                if (!match) return;
+                const PUBLISHED = 'v' + match[1];
+                if (PUBLISHED === RUNNING) return;
+
+                paint(RUNNING + ' → ' + PUBLISHED, true);
+                console.warn('[version] corriendo', RUNNING, 'pero publicado es', PUBLISHED, '— HTML servido desde cache');
+
+                // DOS marcas, no una. Si el almacenamiento esta bloqueado —modo
+                // privado, cuota llena— getItem y setItem tiran, la comparacion
+                // nunca se cumple y esto RECARGA EN BUCLE INFINITO. La marca en
+                // la URL sobrevive a la recarga sin depender de nada.
+                const KEY = 'pecvsAutoReloadFor';
+                const MARCA = 'pecvsR=' + PUBLISHED;
+                let yaIntentado = null;
+                try { yaIntentado = sessionStorage.getItem(KEY); } catch (e) {}
+                const yaEnUrl = location.search.indexOf(MARCA) !== -1;
+
+                if (yaIntentado !== PUBLISHED && !yaEnUrl) {
+                    try { sessionStorage.setItem(KEY, PUBLISHED); } catch (e) {}
+                    console.warn('[version] recargando para tomar', PUBLISHED);
+                    location.replace(location.pathname + location.search +
+                                     (location.search ? '&' : '?') + MARCA);
+                }
+            } catch (e) { /* sin red: queda la version horneada, que es la verdad */ }
         })();
     </script>
 
