@@ -3349,7 +3349,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.27.1';
+        window.APP_HTML_VERSION = 'v2.28.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9697,62 +9697,194 @@
               </div>`;
         };
 
+        // -- RECALCULO RETROACTIVO DEL MES QUE PAGA ------------------------
+        // El reporte del corporativo se sigue moviendo despues del dia 1, asi
+        // que el director tiene que re-otorgar a mitad de mes. El problema: los
+        // dias que ya se pagaron quedaron congelados con el bono viejo, porque
+        // la app del agente nunca vuelve a pagar una fecha (guarda en karmaLog).
+        //
+        // Esto los recalcula. Funciona porque cada dia guarda `base` y `mult`
+        // por separado, no solo el total: el valor correcto es base x factor,
+        // sin adivinar nada.
+        //
+        // TRES LIMITES, los tres a proposito:
+        //  1. Solo entradas SIN `type` -- esas son cierres de dia. Los canjes
+        //     (type:'redemption') y los mint/burn del director (type:'manual_*')
+        //     no se tocan ni por accidente.
+        //  2. Solo fechas de mult.month. Un mes cerrado no se re-abre.
+        //  3. Solo HACIA ARRIBA. Si el multiplicador baja, el agente se queda
+        //     con lo que ya cobro: bajarlo lo deja en negativo si ya lo gasto, y
+        //     quitar totopos que ya vio en pantalla no tiene buena explicacion.
+        //
+        // Es idempotente: correrlo dos veces no mueve nada la segunda.
+        function _recalcRetro(data, mult, baseFallback) {
+            const log = Array.isArray(data.karmaLog) ? data.karmaLog.slice() : [];
+            const factor = 1 + (mult.earned === true ? (Number(mult.bonusPct) || 0) : 0) / 100;
+            let delta = 0, dias = 0;
+            for (let i = 0; i < log.length; i++) {
+                const k = log[i];
+                if (!k || k.type) continue;
+                if (typeof k.date !== 'string' || !k.date.startsWith(mult.month)) continue;
+                const base = Number(k.base) || baseFallback;
+                const esperado = Math.round(base * factor);
+                const actual = Number(k.points) || 0;
+                if (esperado <= actual) continue;
+                delta += esperado - actual;
+                dias++;
+                log[i] = Object.assign({}, k, { points: esperado, base: base, mult: Number(factor.toFixed(4)) });
+            }
+            return { log: log, delta: delta, dias: dias };
+        }
+
+        // El objeto que se guarda. Sale de aqui y no de dos lugares distintos
+        // para que la vista previa y la escritura no puedan discrepar.
+        function _multObj(r) {
+            return {
+                month: r.month, basedOn: r.basedOn,
+                earned: !!r.earned,
+                reason: r.earned ? null : (r.reason || null),
+                tierPct: r.tierPct || 0,
+                bonusPct: r.earned ? r.bonusPct : 0,
+                tierMin: r.tierMin || 0,
+                coverage: Number((r.coverage || 0).toFixed(4)),
+                daysReported: r.daysReported || 0,
+                daysInMonth: r.daysInMonth || 0,
+                reportado: Math.round(r.reportado || 0),
+                ingresado: Math.round(r.ingresado || 0),
+                desvio: Number((r.desvio || 0).toFixed(4)),
+                grantedAt: new Date().toISOString(),
+                grantedBy: (auth.currentUser && auth.currentUser.email) || 'director'
+            };
+        }
+
+        function _nombreMes(monthKey) {
+            const p = String(monthKey || '').split('-');
+            const i = parseInt(p[1], 10) - 1;
+            return (MONTHS_ES[i] || monthKey) + (p[0] ? ' ' + p[0] : '');
+        }
+
         window.grantMultipliers = function() {
             if (!_multRows || !_multRows.length) { alert('Calcula primero la vista previa.'); return; }
             const rows = _multRows;
             const msg = document.getElementById('mult-grant-msg');
             const ganan = rows.filter(r => r.earned).length;
-            if (!confirm(`Se van a escribir ${rows.length} multiplicadores (${ganan} activos).\n\nEsto reemplaza el multiplicador anterior de cada agente. ¿Continuar?`)) return;
 
             (async () => {
-                let okCount = 0, errCount = 0, archivados = 0;
+                // -- FASE 1: SOLO LEER ---------------------------------------
+                // Antes de escribir nada se calcula el ajuste y se le enseña al
+                // director. Esto es lo que sustituye a probarlo en testnet, que
+                // no se puede porque alla no hay CSV del corporativo.
+                if (msg) msg.textContent = 'Calculando el ajuste...';
+
+                // La base sale de config, no de la forma de Puntos: si el
+                // director nunca abrio esa pestaña, los campos estan vacios.
+                let basePts = 10;
+                try {
+                    const pc = await getDoc(doc(db, 'config', 'pointsConfig'));
+                    if (pc.exists()) basePts = Number(pc.data().agentDailyPoints) || 10;
+                } catch (e) { console.warn('[mult] pointsConfig:', e && e.message); }
+
+                const plan = [];
                 for (const r of rows) {
-                    const mult = {
-                        month: r.month, basedOn: r.basedOn,
-                        earned: !!r.earned,
-                        reason: r.earned ? null : (r.reason || null),
-                        tierPct: r.tierPct || 0,
-                        bonusPct: r.earned ? r.bonusPct : 0,
-                        tierMin: r.tierMin || 0,
-                        coverage: Number((r.coverage || 0).toFixed(4)),
-                        daysReported: r.daysReported || 0,
-                        daysInMonth: r.daysInMonth || 0,
-                        reportado: Math.round(r.reportado || 0),
-                        ingresado: Math.round(r.ingresado || 0),
-                        desvio: Number((r.desvio || 0).toFixed(4)),
-                        grantedAt: new Date().toISOString(),
-                        grantedBy: (auth.currentUser && auth.currentUser.email) || 'director'
-                    };
+                    const mult = _multObj(r);
                     try {
-                        // ARCHIVAR ANTES DE PISAR. Escribir `multiplier` reemplaza el valor
-                        // anterior sin dejar rastro, y ese valor es la unica constancia de lo
-                        // que cobro el agente el mes pasado: con que bono, por cuantos dias y
-                        // contra que numero del corporativo. Si alguien reclama en octubre por
-                        // lo de agosto, sin esto no hay con que responderle.
-                        //
-                        // El id del doc es la clave del mes que pagaba, asi que volver a
-                        // otorgar el mismo mes reescribe ese registro en vez de duplicarlo.
-                        const uref = doc(db, 'users', r.email);
-                        const prevSnap = await getDoc(uref);
-                        const prev = prevSnap.exists() ? prevSnap.data().multiplier : null;
-                        if (prev && typeof prev.month === 'string' && prev.month) {
-                            await setDoc(doc(db, 'users', r.email, 'multiplierHistory', prev.month), {
-                                ...prev,
-                                archivedAt: new Date().toISOString(),
-                                archivedBy: (auth.currentUser && auth.currentUser.email) || 'director',
-                                replacedByMonth: mult.month
-                            });
-                            archivados++;
-                        }
-                        await setDoc(uref, { multiplier: mult }, { merge: true });
+                        const snap = await getDoc(doc(db, 'users', r.email));
+                        const res = _recalcRetro(snap.exists() ? snap.data() : {}, mult, basePts);
+                        plan.push({ r: r, mult: mult, delta: res.delta, dias: res.dias });
+                    } catch (e) {
+                        console.error('[mult] previa', r.email, e);
+                        plan.push({ r: r, mult: mult, delta: 0, dias: 0 });
+                    }
+                    if (msg) msg.textContent = 'Calculando el ajuste... ' + plan.length + '/' + rows.length;
+                }
+
+                const conAjuste = plan.filter(p => p.delta > 0).sort((a, b) => b.delta - a.delta);
+                const totalTot = conAjuste.reduce((s, p) => s + p.delta, 0);
+                const mesPaga = _nombreMes(plan.length ? plan[0].mult.month : '');
+                const lista = conAjuste.slice(0, 10)
+                    .map(p => '  - ' + p.r.name + ': +' + p.delta + ' (' + p.dias + (p.dias === 1 ? ' dia)' : ' dias)'))
+                    .join('\n');
+
+                const texto =
+                    'Se van a escribir ' + rows.length + ' multiplicadores (' + ganan + ' activos).\n' +
+                    'Esto reemplaza el multiplicador anterior de cada agente.\n\n' +
+                    (conAjuste.length
+                        ? 'AJUSTE RETROACTIVO -- ' + conAjuste.length + ' agente(s), +' + totalTot + ' totopos:\n' + lista +
+                          (conAjuste.length > 10 ? '\n  ... y ' + (conAjuste.length - 10) + ' mas' : '') +
+                          '\n\nSon dias de ' + mesPaga + ' que ya se habian pagado con el\n' +
+                          'multiplicador anterior. Nadie pierde totopos: el ajuste solo sube.\n\n'
+                        : 'Sin ajuste retroactivo: ningun dia ya pagado sube de valor.\n\n') +
+                    'Continuar?';
+
+                if (!confirm(texto)) { if (msg) msg.textContent = 'Cancelado. No se escribio nada.'; return; }
+
+                // -- FASE 2: ESCRIBIR ----------------------------------------
+                // En transaccion, como ya hace mint/burn en Tesoreria: el agente
+                // puede estar sincronizando su bitacora en este mismo instante y
+                // sin esto uno de los dos pisa al otro.
+                let okCount = 0, errCount = 0, archivados = 0, ajustados = 0, totopos = 0;
+                for (const p of plan) {
+                    const r = p.r, mult = p.mult;
+                    const uref = doc(db, 'users', r.email);
+                    try {
+                        await runTransaction(db, async (tx) => {
+                            const snap = await tx.get(uref);
+                            const data = snap.exists() ? snap.data() : {};
+                            const prev = data.multiplier || null;
+                            const res = _recalcRetro(data, mult, basePts);
+
+                            const payload = { multiplier: mult };
+                            if (res.delta > 0) {
+                                // Marca propia del recalculo. Sirve para dos cosas:
+                                // deja rastro de que el ajuste existio, y le cambia
+                                // el LARGO al karmaLog -- que es lo unico que el
+                                // listener del agente vigila para adoptar el log del
+                                // servidor. Sin ella el desglose por dia se revierte
+                                // en el siguiente sync del agente.
+                                res.log.push({
+                                    type: 'mult_retro',
+                                    points: 0,
+                                    dias: res.dias,
+                                    delta: res.delta,
+                                    reason: 'Recalculo de tu multiplicador de ' + _nombreMes(mult.month),
+                                    fecha: nowISO(),
+                                    by: (auth.currentUser && auth.currentUser.email) || 'director'
+                                });
+                                payload.karma = (Number(data.karma) || 0) + res.delta;
+                                payload.karmaLog = res.log;
+                            }
+
+                            // ARCHIVAR ANTES DE PISAR. `multiplier` es la unica
+                            // constancia de lo que cobro el agente: con que bono,
+                            // por cuantos dias y contra que numero del corporativo.
+                            //
+                            // El id lleva marca de tiempo, no solo el mes. Antes era
+                            // el mes a secas y re-otorgar el mismo mes dos veces
+                            // borraba el archivo del primero -- justo lo que ahora
+                            // va a pasar todos los meses.
+                            if (prev && typeof prev.month === 'string' && prev.month) {
+                                const sello = String(prev.grantedAt || nowISO()).replace(/[:.]/g, '-');
+                                tx.set(doc(db, 'users', r.email, 'multiplierHistory', prev.month + '__' + sello), Object.assign({}, prev, {
+                                    archivedAt: nowISO(),
+                                    archivedBy: (auth.currentUser && auth.currentUser.email) || 'director',
+                                    replacedByMonth: mult.month
+                                }));
+                                archivados++;
+                            }
+                            tx.set(uref, payload, { merge: true });
+                            if (res.delta > 0) { ajustados++; totopos += res.delta; }
+                        });
                         okCount++;
                     } catch (e) { console.error('[mult] grant', r.email, e); errCount++; }
-                    if (msg) msg.textContent = `Guardando… ${okCount + errCount}/${rows.length}`;
+                    if (msg) msg.textContent = 'Guardando... ' + (okCount + errCount) + '/' + plan.length;
                 }
                 if (archivados) console.log('[mult] archivados en multiplierHistory: ' + archivados);
+                const extra = ajustados
+                    ? ' - ajuste retroactivo a ' + ajustados + ' agente(s), +' + totopos + ' totopos'
+                    : '';
                 if (msg) msg.innerHTML = errCount
-                    ? `<span style="color:var(--red);">Listo con ${errCount} error(es). ${okCount} guardados.</span>`
-                    : `<span style="color:var(--green);"><i class="fa fa-check"></i> ${okCount} multiplicadores otorgados.</span>`;
+                    ? '<span style="color:var(--red);">Listo con ' + errCount + ' error(es). ' + okCount + ' guardados' + extra + '.</span>'
+                    : '<span style="color:var(--green);"><i class="fa fa-check"></i> ' + okCount + ' multiplicadores otorgados' + extra + '.</span>';
             })();
         };
 
