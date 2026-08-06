@@ -2620,7 +2620,7 @@
                     </p>
                     <div id="checador-body" style="display:none;">
                         <p style="font-size:12px;color:var(--slate);margin-bottom:16px;">
-                            Compará la prima que cada agente <strong>reportó en la app</strong> contra la <strong>realmente ingresada</strong> al sistema (<code>P_ING TOT</code> menos <code>PRIMA EXCD</code> — el excedente no es ingreso del negocio). Cruce exclusivo por clave de agente (<code>ASO</code> = clave). Se marca 🚩 cuando la diferencia supera ±10% sobre lo reportado. Todo se procesa en tu navegador — el CSV no se sube a ningún lado.
+                            Compará la prima que cada agente <strong>reportó en la app</strong> contra la <strong>realmente ingresada</strong> al sistema. Al <code>P_ING TOT</code> siempre se le resta <code>PRIMA EXCD</code> —el excedente no es ingreso del negocio— y con el interruptor de abajo se le puede sumar <code>PRIMA TRAM</code>. Cruce exclusivo por clave de agente (<code>ASO</code> = clave). Se marca 🚩 cuando la diferencia supera ±10% sobre lo reportado. Todo se procesa en tu navegador — el CSV no se sube a ningún lado.
                         </p>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
                             <div>
@@ -2639,6 +2639,10 @@
                                 <label class="field-label">Archivo CSV del sistema</label>
                                 <input type="file" id="checador-file" accept=".csv,text/csv" onchange="handleChecadorFile(this)" style="font-size:12px;">
                                 <div id="checador-csv-info" style="font-size:11px;color:var(--slate);margin-top:5px;max-width:420px;line-height:1.5;"></div>
+                                <label style="display:inline-flex;align-items:center;gap:7px;margin-top:7px;font-size:12px;cursor:pointer;">
+                                    <input type="checkbox" id="checador-tramite" onchange="_recalcularIngresado()" style="width:15px;height:15px;cursor:pointer;">
+                                    <span>Sumar <code>PRIMA TRAM</code> (prima en trámite)</span>
+                                </label>
                             </div>
                             <button class="btn btn-sm" onclick="renderChecador()" style="background:var(--gold);color:#000;font-weight:700;"><i class="fa fa-check-double"></i> Verificar</button>
                             <button class="btn btn-sm" onclick="previewMultipliers()" style="background:var(--gold); color:#000;">
@@ -3350,7 +3354,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.30.0';
+        window.APP_HTML_VERSION = 'v2.31.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9179,6 +9183,52 @@
                 .toUpperCase().replace(/[^A-Z0-9]/g, '');
         }
 
+        // El excedente SIEMPRE se resta: no es ingreso del negocio. El tramite es
+        // la duda abierta -- si una poliza en tramite ya cuenta como ingresada, el
+        // agente la reporto cuando la metio y medirlo sin ella lo castiga. Por eso
+        // va como interruptor y no clavado.
+        let _checadorSinExcd = false;
+        window.sumarTramite = function() {
+            return !!(document.getElementById('checador-tramite') || {}).checked;
+        };
+
+        // window.* y no `function` a secas: el script es type="module", asi que su
+        // scope no es global y el onchange del checkbox no la encontraria.
+        window._recalcularIngresado = function() {
+            const rows = _checadorRows || [];
+            const conTram = sumarTramite();
+            rows.forEach(r => {
+                r.ingresado = r.ingTotal - r.excedente + (conTram ? r.tramite : 0);
+            });
+
+            // Cambiar el criterio invalida cualquier calculo previo. Se limpia a
+            // proposito: dejar la tabla de multiplicadores en pantalla con los
+            // numeros del criterio anterior es como se otorga algo equivocado.
+            _multRows = null;
+            const caja = document.getElementById('mult-grant-box');
+            if (caja) { caja.style.display = 'none'; caja.innerHTML = ''; }
+
+            const aviso = document.getElementById('checador-csv-info');
+            if (!aviso) return;
+            if (!rows.length) { aviso.innerHTML = ''; return; }
+            const money = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-MX');
+            const sT = rows.reduce((s, r) => s + r.ingTotal, 0);
+            const sE = rows.reduce((s, r) => s + r.excedente, 0);
+            const sR = rows.reduce((s, r) => s + r.tramite, 0);
+            const nT = rows.filter(r => r.tramite > 0).length;
+            aviso.innerHTML =
+                (_checadorSinExcd
+                    ? '<span style="color:var(--red);font-weight:700;">⚠ No encontré la columna PRIMA EXCD.</span> ' +
+                      'Se está usando <code>P_ING TOT</code> con el excedente adentro. Revisá el encabezado.<br>'
+                    : '') +
+                rows.length + ' agentes · <code>P_ING TOT</code> ' + money(sT) +
+                ' − <code>PRIMA EXCD</code> ' + money(sE) +
+                (conTram ? ' + <code>PRIMA TRAM</code> ' + money(sR) : '') +
+                ' = <strong>' + money(sT - sE + (conTram ? sR : 0)) + '</strong>' +
+                (nT ? '<br>El trámite son ' + money(sR) + ' repartidos en ' + nT + ' agente(s)' +
+                      (conTram ? ' — se están sumando.' : ' — no se están sumando.') : '');
+        };
+
         window.handleChecadorFile = function(input) {
             const file = input.files && input.files[0];
             const aviso = document.getElementById('checador-csv-info');
@@ -9196,6 +9246,7 @@
                 const enc = _parseCsvLine(lines[0]).map(_normCol);
                 const iTot  = enc.indexOf('PINGTOT') >= 0 ? enc.indexOf('PINGTOT') : 3;
                 const iExcd = enc.indexOf('PRIMAEXCD');
+                const iTram = enc.indexOf('PRIMATRAM');
 
                 const rows = [];
                 lines.forEach((line, idx) => {
@@ -9214,24 +9265,15 @@
                     // del corporativo y hace que el agente parezca no coincidir.
                     // Sobre el reporte de julio el excedente era el 4.8% del total.
                     const excedente = iExcd >= 0 ? (parseFloat((c[iExcd] || '').trim()) || 0) : 0;
-                    rows.push({ aso, nombre, ingresado: ingTotal - excedente, ingTotal, excedente });
+                    const tramite   = iTram >= 0 ? (parseFloat((c[iTram] || '').trim()) || 0) : 0;
+                    // `ingresado` no se fija aca: depende del interruptor de
+                    // tramite y ese se puede mover despues de cargar el archivo.
+                    rows.push({ aso, nombre, ingTotal, excedente, tramite, ingresado: 0 });
                 });
                 _checadorRows = rows;
+                _checadorSinExcd = iExcd < 0;
+                window._recalcularIngresado();
 
-                // Se dice en pantalla que columnas se usaron y cuanto se resto.
-                // Si el corporativo cambia el encabezado, esto lo delata antes de
-                // que el numero equivocado llegue a un multiplicador.
-                if (aviso) {
-                    // money() es const LOCAL de otras tres funciones, no global.
-                    const money = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-MX');
-                    const sumT = rows.reduce((s, r) => s + r.ingTotal, 0);
-                    const sumE = rows.reduce((s, r) => s + r.excedente, 0);
-                    aviso.innerHTML = iExcd < 0
-                        ? '<span style="color:var(--red);font-weight:700;">⚠ No encontré la columna PRIMA EXCD en este CSV.</span> ' +
-                          'Se está usando <code>P_ING TOT</code> tal cual, con el excedente adentro. Revisá el encabezado.'
-                        : rows.length + ' agentes · ingresado = <code>P_ING TOT</code> − <code>PRIMA EXCD</code> = ' +
-                          money(sumT) + ' − ' + money(sumE) + ' = <strong>' + money(sumT - sumE) + '</strong>';
-                }
             };
             reader.readAsText(file, 'UTF-8');
         };
