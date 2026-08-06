@@ -2620,7 +2620,7 @@
                     </p>
                     <div id="checador-body" style="display:none;">
                         <p style="font-size:12px;color:var(--slate);margin-bottom:16px;">
-                            Compará la prima que cada agente <strong>reportó en la app</strong> contra la <strong>realmente ingresada</strong> al sistema (columna <code>P_ING TOT</code> del CSV). Cruce exclusivo por clave de agente (<code>ASO</code> = clave). Se marca 🚩 cuando la diferencia supera ±10% sobre lo reportado. Todo se procesa en tu navegador — el CSV no se sube a ningún lado.
+                            Compará la prima que cada agente <strong>reportó en la app</strong> contra la <strong>realmente ingresada</strong> al sistema (<code>P_ING TOT</code> menos <code>PRIMA EXCD</code> — el excedente no es ingreso del negocio). Cruce exclusivo por clave de agente (<code>ASO</code> = clave). Se marca 🚩 cuando la diferencia supera ±10% sobre lo reportado. Todo se procesa en tu navegador — el CSV no se sube a ningún lado.
                         </p>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
                             <div>
@@ -2638,6 +2638,7 @@
                             <div>
                                 <label class="field-label">Archivo CSV del sistema</label>
                                 <input type="file" id="checador-file" accept=".csv,text/csv" onchange="handleChecadorFile(this)" style="font-size:12px;">
+                                <div id="checador-csv-info" style="font-size:11px;color:var(--slate);margin-top:5px;max-width:420px;line-height:1.5;"></div>
                             </div>
                             <button class="btn btn-sm" onclick="renderChecador()" style="background:var(--gold);color:#000;font-weight:700;"><i class="fa fa-check-double"></i> Verificar</button>
                             <button class="btn btn-sm" onclick="previewMultipliers()" style="background:var(--gold); color:#000;">
@@ -3349,7 +3350,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.28.0';
+        window.APP_HTML_VERSION = 'v2.29.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9170,13 +9171,32 @@
             return out;
         }
 
+        // Normaliza un encabezado para poder buscarlo por nombre: sin acentos, sin
+        // espacios ni guiones bajos, en mayusculas. "P_ING TOT" -> "PINGTOT".
+        function _normCol(h) {
+            return String(h || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
         window.handleChecadorFile = function(input) {
             const file = input.files && input.files[0];
-            if (!file) { _checadorRows = null; return; }
+            const aviso = document.getElementById('checador-csv-info');
+            if (!file) { _checadorRows = null; if (aviso) aviso.innerHTML = ''; return; }
             const reader = new FileReader();
             reader.onload = ev => {
                 const text = String(ev.target.result || '');
                 const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+                if (!lines.length) { _checadorRows = null; return; }
+
+                // Las columnas se ubican POR NOMBRE, no por posicion. Antes
+                // `ingresado` era c[3] a secas; el dia que el corporativo agregue
+                // o mueva una columna, el numero contra el que se mide a todo el
+                // equipo cambia en silencio y nadie se entera.
+                const enc = _parseCsvLine(lines[0]).map(_normCol);
+                const iTot  = enc.indexOf('PINGTOT') >= 0 ? enc.indexOf('PINGTOT') : 3;
+                const iExcd = enc.indexOf('PRIMAEXCD');
+
                 const rows = [];
                 lines.forEach((line, idx) => {
                     const c = _parseCsvLine(line);
@@ -9188,11 +9208,30 @@
                     if (!pr) return;
                     if (aso === '9999' || nombre.toUpperCase() === 'OTROS') return;
                     if (!aso) return;
-                    // P_ING TOT (col 3) vacío -> $0 ingresado.
-                    const ingresado = parseFloat((c[3] || '').trim()) || 0;
-                    rows.push({ aso, nombre, ingresado });
+                    const ingTotal = parseFloat((c[iTot] || '').trim()) || 0;
+                    // EL EXCEDENTE NO ES INGRESO DEL NEGOCIO. P_ING TOT lo trae
+                    // adentro, asi que medir contra esa columna infla el numero
+                    // del corporativo y hace que el agente parezca no coincidir.
+                    // Sobre el reporte de julio el excedente era el 4.8% del total.
+                    const excedente = iExcd >= 0 ? (parseFloat((c[iExcd] || '').trim()) || 0) : 0;
+                    rows.push({ aso, nombre, ingresado: ingTotal - excedente, ingTotal, excedente });
                 });
                 _checadorRows = rows;
+
+                // Se dice en pantalla que columnas se usaron y cuanto se resto.
+                // Si el corporativo cambia el encabezado, esto lo delata antes de
+                // que el numero equivocado llegue a un multiplicador.
+                if (aviso) {
+                    // money() es const LOCAL de otras tres funciones, no global.
+                    const money = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-MX');
+                    const sumT = rows.reduce((s, r) => s + r.ingTotal, 0);
+                    const sumE = rows.reduce((s, r) => s + r.excedente, 0);
+                    aviso.innerHTML = iExcd < 0
+                        ? '<span style="color:var(--red);font-weight:700;">⚠ No encontré la columna PRIMA EXCD en este CSV.</span> ' +
+                          'Se está usando <code>P_ING TOT</code> tal cual, con el excedente adentro. Revisá el encabezado.'
+                        : rows.length + ' agentes · ingresado = <code>P_ING TOT</code> − <code>PRIMA EXCD</code> = ' +
+                          money(sumT) + ' − ' + money(sumE) + ' = <strong>' + money(sumT - sumE) + '</strong>';
+                }
             };
             reader.readAsText(file, 'UTF-8');
         };
