@@ -2989,6 +2989,45 @@
         </div>
     </div><!-- /tes-action-modal -->
 
+    <!-- MULTIPLICADOR MANUAL -->
+    <div class="modal-overlay" id="mult-manual-modal">
+        <div class="modal-box" style="max-width:460px;">
+            <button class="modal-close" onclick="cerrarMultManual()">&times;</button>
+            <h2 id="mult-manual-title" style="margin-top:0;font-size:18px;"><i class="fa fa-bolt"></i> Otorgar multiplicador</h2>
+            <p style="font-size:12px;color:var(--slate);margin-bottom:14px;" id="mult-manual-sub">A discreción, sin pasar por el CSV.</p>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="field-label">Agente</label>
+                    <select id="mult-manual-agente" style="width:100%;padding:9px;font-size:13px;"></select>
+                </div>
+                <div>
+                    <label class="field-label">Bono sobre el día (%)</label>
+                    <input type="number" id="mult-manual-bono" min="0" max="1000" step="1" placeholder="Ej. 100"
+                           oninput="_multManualPreview()" style="font-size:18px;font-weight:700;text-align:center;">
+                    <div id="mult-manual-vale" style="font-size:11.5px;color:var(--slate);margin-top:5px;text-align:center;"></div>
+                </div>
+                <div>
+                    <label class="field-label">Mes que paga</label>
+                    <input type="month" id="mult-manual-mes" style="width:100%;padding:9px;font-size:13px;">
+                    <div style="font-size:11px;color:var(--slate);margin-top:4px;line-height:1.45;">
+                        Sólo multiplica los días de ESE mes. Los días de ese mes que el agente
+                        ya cobró se recalculan y se le abona la diferencia.
+                    </div>
+                </div>
+                <div>
+                    <label class="field-label">Motivo</label>
+                    <input type="text" id="mult-manual-nota" placeholder="Ej. Su número llegó tarde del corporativo">
+                    <div style="font-size:11px;color:var(--slate);margin-top:4px;">El agente lo ve en su recibo.</div>
+                </div>
+                <div id="mult-manual-msg" style="font-size:12px;min-height:16px;"></div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn" id="mult-manual-ok" onclick="guardarMultManual()" style="flex:1;font-weight:700;"><i class="fa fa-check"></i> Otorgar</button>
+                    <button class="btn btn-sm" id="mult-manual-quitar" onclick="quitarMultManual()" style="background:transparent;border-color:var(--red);color:var(--red);">Quitar</button>
+                </div>
+            </div>
+        </div>
+    </div><!-- /mult-manual-modal -->
+
     <!-- TESORERÍA: HISTORIAL MODAL -->
     <div class="modal-overlay" id="tes-history-modal">
         <div class="modal-box" style="max-width:600px;">
@@ -3354,7 +3393,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.31.0';
+        window.APP_HTML_VERSION = 'v2.32.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -8669,8 +8708,9 @@
                 body.innerHTML = '<div class="empty-state"><i class="fa fa-spinner fa-spin"></i> Cargando agentes…</div>';
                 return;
             }
+            const botonManual = '<div style="margin-bottom:12px;"><button class="btn btn-sm" onclick="abrirMultManual()" style="font-weight:700;"><i class="fa fa-bolt"></i> Otorgar a mano</button></div>';
             if (!conCampo.length) {
-                body.innerHTML = '<div class="empty-state"><i class="fa fa-circle-info"></i> Todavía no se ha otorgado ningún multiplicador. Se otorga desde <b>Puntos</b>, después de subir el CSV y correr la vista previa.</div>';
+                body.innerHTML = botonManual + '<div class="empty-state"><i class="fa fa-circle-info"></i> Todavía no se ha otorgado ningún multiplicador. Se otorga desde <b>Puntos</b>, después de subir el CSV y correr la vista previa — o a mano con el botón de arriba.</div>';
                 return;
             }
 
@@ -8705,11 +8745,12 @@
                   <td style="padding:7px 8px;text-align:right;font-weight:800;">${m.earned ? vale : base}</td>
                   <td style="padding:7px 8px;text-align:right;color:var(--slate);">${m.daysReported || 0}/${m.daysInMonth || 0}</td>
                   <td style="padding:7px 8px;text-align:right;color:var(--slate);">${money(m.ingresado)}</td>
-                  <td style="padding:7px 8px;text-align:right;color:var(--slate);white-space:nowrap;">${mesLindo(m.month)}<br><span style="font-size:10px;">por ${mesLindo(_mesKeyDe(m.basedOn))}</span></td>
+                  <td style="padding:7px 8px;text-align:right;color:var(--slate);white-space:nowrap;">${mesLindo(m.month)}<br><span style="font-size:10px;">por ${mesLindo(_mesKeyDe(m.basedOn))}</span>${m.manual ? '<br><span style="font-size:9.5px;color:var(--gold-l);font-weight:800;">A MANO</span>' : ''}</td>
+                  <td style="padding:7px 8px;text-align:right;"><button class="btn btn-sm" onclick="abrirMultManual('${a.email}')" style="padding:4px 9px;font-size:11px;">Editar</button></td>
                 </tr>`;
             };
 
-            body.innerHTML = `
+            body.innerHTML = botonManual + `
               <div style="overflow-x:auto;">
               <table style="width:100%;border-collapse:collapse;font-size:12px;">
                 <thead><tr style="text-align:left;color:var(--slate);border-bottom:1px solid rgba(255,255,255,0.12);">
@@ -8720,6 +8761,7 @@
                   <th style="padding:7px 8px;text-align:right;">Días</th>
                   <th style="padding:7px 8px;text-align:right;">Ingresado</th>
                   <th style="padding:7px 8px;text-align:right;">Paga en</th>
+                  <th style="padding:7px 8px;text-align:right;"></th>
                 </tr></thead>
                 <tbody>${orden.map(fila).join('')}</tbody>
               </table>
@@ -8728,6 +8770,161 @@
                 <b>Vale el día</b> son los totopos que gana por cada día reportado del mes que paga.
                 Los que dicen <b>venció</b> ganaron el multiplicador de un mes anterior y ya no lo cobran.
               </p>`;
+        };
+
+        // ── MULTIPLICADOR A MANO ──────────────────────────────────────────
+        // El calculo con CSV cubre el caso normal, pero no todos: un numero del
+        // corporativo que llega tarde, un acuerdo puntual, un agente al que hay
+        // que reconocerle algo. Esto es la valvula, y deja rastro de que fue a
+        // mano para que nadie confunda un regalo con un multiplicador ganado.
+        let _multManualEmail = null;
+
+        window.abrirMultManual = function (email) {
+            _multManualEmail = email || null;
+            const sel = document.getElementById('mult-manual-agente');
+            const agentes = (state.agents || []).slice()
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+            sel.innerHTML = agentes.map(a =>
+                '<option value="' + a.email + '">' + (a.name || a.email) +
+                (a.companyCode ? '  ·  ' + a.companyCode : '') + '</option>').join('');
+            if (email) sel.value = email;
+            sel.disabled = !!email;
+
+            const act = agentes.find(a => a.email === sel.value);
+            const m = act && act.multiplier;
+            const hoy = new Date();
+            document.getElementById('mult-manual-bono').value = m && m.earned ? (m.bonusPct || 0) : '';
+            document.getElementById('mult-manual-mes').value = (m && m.month) ||
+                (hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0'));
+            document.getElementById('mult-manual-nota').value = (m && m.nota) || '';
+            document.getElementById('mult-manual-msg').innerHTML = '';
+            document.getElementById('mult-manual-quitar').style.display = (m && m.earned) ? '' : 'none';
+            document.getElementById('mult-manual-title').innerHTML = (m && m.earned)
+                ? '<i class="fa fa-bolt"></i> Editar multiplicador'
+                : '<i class="fa fa-bolt"></i> Otorgar multiplicador';
+            document.getElementById('mult-manual-sub').textContent = (m && m.earned)
+                ? 'Tiene +' + (m.bonusPct || 0) + '% otorgado' + (m.manual ? ' a mano.' : ' por el cálculo del CSV.')
+                : 'A discreción, sin pasar por el CSV.';
+            window._multManualPreview();
+            document.getElementById('mult-manual-modal').classList.add('open');
+        };
+        window.cerrarMultManual = function () {
+            document.getElementById('mult-manual-modal').classList.remove('open');
+        };
+        window._multManualPreview = function () {
+            const b = Number(document.getElementById('mult-manual-bono').value) || 0;
+            const base = _numVal('pts-agent', 10);
+            const el = document.getElementById('mult-manual-vale');
+            if (el) el.textContent = b > 0
+                ? 'Cada día reportado de ese mes le valdría ' + Math.round(base * (1 + b / 100)) +
+                  ' totopos en vez de ' + base + '.'
+                : '';
+        };
+
+        // Escribe el multiplicador y, si sube, reparte hacia atras los dias de
+        // ese mes que ya se pagaron. Misma transaccion y mismo archivo que el
+        // otorgamiento masivo: no hay dos caminos distintos para el mismo dato.
+        async function _escribirMultManual(email, quitar) {
+            const bono = Number(document.getElementById('mult-manual-bono').value) || 0;
+            const mes  = String(document.getElementById('mult-manual-mes').value || '').trim();
+            const nota = String(document.getElementById('mult-manual-nota').value || '').trim();
+            const msg  = document.getElementById('mult-manual-msg');
+            if (!email) { msg.innerHTML = '<span style="color:var(--red);">Elegí un agente.</span>'; return; }
+            if (!quitar && !/^\d{4}-\d{2}$/.test(mes)) {
+                msg.innerHTML = '<span style="color:var(--red);">Falta el mes que paga.</span>'; return; }
+            if (!quitar && bono <= 0) {
+                msg.innerHTML = '<span style="color:var(--red);">El bono tiene que ser mayor a 0.</span>'; return; }
+
+            let basePts = 10;
+            try {
+                const pc = await getDoc(doc(db, 'config', 'pointsConfig'));
+                if (pc.exists()) basePts = Number(pc.data().agentDailyPoints) || 10;
+            } catch (e) {}
+
+            msg.innerHTML = 'Guardando…';
+            const uref = doc(db, 'users', email);
+            let delta = 0;
+            try {
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(uref);
+                    if (!snap.exists()) throw new Error('El agente no existe.');
+                    const data = snap.data();
+                    const prev = data.multiplier || null;
+
+                    const mult = quitar
+                        ? Object.assign({}, prev || {}, {
+                            earned: false, bonusPct: 0, reason: 'retirado-a-mano',
+                            manual: true, nota: nota || 'Retirado por tu director',
+                            grantedAt: nowISO(),
+                            grantedBy: (auth.currentUser && auth.currentUser.email) || 'director'
+                          })
+                        : {
+                            month: mes, basedOn: prev && prev.basedOn ? prev.basedOn : '',
+                            earned: true, reason: null,
+                            tierPct: bono, bonusPct: bono, tierMin: 0,
+                            coverage: prev ? (prev.coverage || 0) : 0,
+                            daysReported: prev ? (prev.daysReported || 0) : 0,
+                            daysInMonth: prev ? (prev.daysInMonth || 0) : 0,
+                            reportado: prev ? (prev.reportado || 0) : 0,
+                            ingresado: prev ? (prev.ingresado || 0) : 0,
+                            desvio: prev ? (prev.desvio || 0) : 0,
+                            manual: true,
+                            nota: nota || 'Otorgado por tu director',
+                            grantedAt: nowISO(),
+                            grantedBy: (auth.currentUser && auth.currentUser.email) || 'director'
+                          };
+
+                    const res = _recalcRetro(data, mult, basePts);
+                    const payload = { multiplier: mult };
+                    if (res.delta > 0) {
+                        res.log.push({
+                            type: 'mult_retro', points: 0, dias: res.dias, delta: res.delta,
+                            reason: 'Recálculo de tu multiplicador de ' + _nombreMes(mult.month),
+                            fecha: nowISO(),
+                            by: (auth.currentUser && auth.currentUser.email) || 'director'
+                        });
+                        payload.karma = (Number(data.karma) || 0) + res.delta;
+                        payload.karmaLog = res.log;
+                        delta = res.delta;
+                    }
+                    if (prev && typeof prev.month === 'string' && prev.month) {
+                        const sello = String(prev.grantedAt || nowISO()).replace(/[:.]/g, '-');
+                        tx.set(doc(db, 'users', email, 'multiplierHistory', prev.month + '__' + sello),
+                          Object.assign({}, prev, {
+                            archivedAt: nowISO(),
+                            archivedBy: (auth.currentUser && auth.currentUser.email) || 'director',
+                            replacedByMonth: mult.month || ''
+                          }));
+                    }
+                    tx.set(uref, payload, { merge: true });
+
+                    // La copia en memoria tambien, o la tabla sigue mostrando lo viejo
+                    // hasta la proxima carga completa de agentes.
+                    const local = (state.agents || []).find(a => a.email === email);
+                    if (local) local.multiplier = mult;
+                });
+                msg.innerHTML = '<span style="color:var(--green);"><i class="fa fa-check"></i> Listo' +
+                    (delta ? ' · se le abonaron ' + delta + ' totopos de días ya cobrados' : '') + '.</span>';
+                if (typeof renderMultActivos === 'function') renderMultActivos();
+                setTimeout(window.cerrarMultManual, 1400);
+            } catch (e) {
+                console.error('[mult manual]', e);
+                msg.innerHTML = '<span style="color:var(--red);">No se pudo guardar: ' + (e.message || e) + '</span>';
+            }
+        }
+
+        window.guardarMultManual = function () {
+            const email = document.getElementById('mult-manual-agente').value;
+            const bono = Number(document.getElementById('mult-manual-bono').value) || 0;
+            const nom = ((state.agents || []).find(a => a.email === email) || {}).name || email;
+            if (!confirm('Otorgar +' + bono + '% a ' + nom + '.\n\nLos días del mes que ya cobró se recalculan y se le abona la diferencia.\n\n¿Continuar?')) return;
+            _escribirMultManual(email, false);
+        };
+        window.quitarMultManual = function () {
+            const email = document.getElementById('mult-manual-agente').value;
+            const nom = ((state.agents || []).find(a => a.email === email) || {}).name || email;
+            if (!confirm('Quitar el multiplicador de ' + nom + '.\n\nLos totopos que YA cobró se los queda: no se le descuenta nada.\nDeja de multiplicar de hoy en adelante.\n\n¿Continuar?')) return;
+            _escribirMultManual(email, true);
         };
 
         // "Julio 2026" -> "2026-07". El campo basedOn se guarda con el nombre
