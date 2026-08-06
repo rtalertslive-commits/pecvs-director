@@ -3393,7 +3393,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.32.0';
+        window.APP_HTML_VERSION = 'v2.33.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -8877,9 +8877,15 @@
                     const res = _recalcRetro(data, mult, basePts);
                     const payload = { multiplier: mult };
                     if (res.delta > 0) {
+                        // La celebracion del agente muestra este texto. Decirle
+                        // "recalculo" a un regalo no es lo que paso: no se
+                        // recalculo nada, su director se lo dio.
                         res.log.push({
                             type: 'mult_retro', points: 0, dias: res.dias, delta: res.delta,
-                            reason: 'Recálculo de tu multiplicador de ' + _nombreMes(mult.month),
+                            manual: true,
+                            reason: quitar
+                                ? 'Ajuste de tu multiplicador de ' + _nombreMes(mult.month)
+                                : 'Tu director te otorgó un multiplicador de ' + _nombreMes(mult.month),
                             fecha: nowISO(),
                             by: (auth.currentUser && auth.currentUser.email) || 'director'
                         });
@@ -10176,7 +10182,7 @@
                                     points: 0,
                                     dias: res.dias,
                                     delta: res.delta,
-                                    reason: 'Recalculo de tu multiplicador de ' + _nombreMes(mult.month),
+                                    reason: 'Recálculo de tu multiplicador de ' + _nombreMes(mult.month),
                                     fecha: nowISO(),
                                     by: (auth.currentUser && auth.currentUser.email) || 'director'
                                 });
