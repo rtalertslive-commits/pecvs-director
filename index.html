@@ -3350,7 +3350,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.29.0';
+        window.APP_HTML_VERSION = 'v2.30.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9796,6 +9796,36 @@
             };
         }
 
+        // -- PISO: LO YA OTORGADO NO BAJA -----------------------------------
+        // Dentro del MISMO mes que paga, a nadie se le quita el multiplicador ni
+        // se le recorta el bono al re-otorgar.
+        //
+        // No es generosidad: el numero del corporativo se sigue moviendo despues
+        // del dia 1, y los tres que perderian el de agosto no hicieron nada mal
+        // -- a Rosa Reyna su cifra paso de $7,679 a $13,497 DESPUES de que se le
+        // otorgo. Reporto honesto contra lo que existia ese dia. Quitarselo seria
+        // castigarla por un movimiento del corporativo.
+        //
+        // Se conserva el snapshot completo con el que se le otorgo, no solo el
+        // bono. Si dejaramos los numeros nuevos, su recibo diria a la vez que no
+        // coincidio y que gano. Los numeros del recalculo se guardan aparte para
+        // que quede el rastro de que se reviso.
+        function _aplicarPiso(mult, prev) {
+            if (!prev || prev.earned !== true || prev.month !== mult.month) return mult;
+            if (mult.earned === true && (mult.bonusPct || 0) >= (prev.bonusPct || 0)) return mult;
+            return Object.assign({}, prev, {
+                basedOn: mult.basedOn,
+                grantedAt: mult.grantedAt,
+                grantedBy: mult.grantedBy,
+                protegido: true,
+                recalcEarned: !!mult.earned,
+                recalcBonusPct: mult.bonusPct || 0,
+                recalcIngresado: mult.ingresado || 0,
+                recalcDesvio: mult.desvio || 0,
+                recalcAt: mult.grantedAt
+            });
+        }
+
         function _nombreMes(monthKey) {
             const p = String(monthKey || '').split('-');
             const i = parseInt(p[1], 10) - 1;
@@ -9825,14 +9855,19 @@
 
                 const plan = [];
                 for (const r of rows) {
-                    const mult = _multObj(r);
+                    let mult = _multObj(r);
                     try {
                         const snap = await getDoc(doc(db, 'users', r.email));
-                        const res = _recalcRetro(snap.exists() ? snap.data() : {}, mult, basePts);
-                        plan.push({ r: r, mult: mult, delta: res.delta, dias: res.dias });
+                        const data = snap.exists() ? snap.data() : {};
+                        // El piso se aplica ANTES de calcular el ajuste: si el
+                        // agente queda protegido, el bono que rige es el viejo.
+                        mult = _aplicarPiso(mult, data.multiplier || null);
+                        const res = _recalcRetro(data, mult, basePts);
+                        plan.push({ r: r, mult: mult, delta: res.delta, dias: res.dias,
+                                    protegido: !!mult.protegido });
                     } catch (e) {
                         console.error('[mult] previa', r.email, e);
-                        plan.push({ r: r, mult: mult, delta: 0, dias: 0 });
+                        plan.push({ r: r, mult: mult, delta: 0, dias: 0, protegido: false });
                     }
                     if (msg) msg.textContent = 'Calculando el ajuste... ' + plan.length + '/' + rows.length;
                 }
@@ -9844,9 +9879,21 @@
                     .map(p => '  - ' + p.r.name + ': +' + p.delta + ' (' + p.dias + (p.dias === 1 ? ' dia)' : ' dias)'))
                     .join('\n');
 
+                const protegidos = plan.filter(p => p.protegido);
+                const listaProt = protegidos.slice(0, 10)
+                    .map(p => '  - ' + p.r.name + ': conserva +' + (p.mult.bonusPct || 0) + '%' +
+                              (p.mult.recalcEarned ? ' (el recalculo daba +' + p.mult.recalcBonusPct + '%)'
+                                                   : ' (el recalculo lo dejaba sin multiplicador)'))
+                    .join('\n');
+
                 const texto =
                     'Se van a escribir ' + rows.length + ' multiplicadores (' + ganan + ' activos).\n' +
                     'Esto reemplaza el multiplicador anterior de cada agente.\n\n' +
+                    (protegidos.length
+                        ? 'PROTEGIDOS -- ' + protegidos.length + ' agente(s) conservan lo que ya se les\n' +
+                          'habia otorgado este mes, porque a nadie se le baja el multiplicador:\n' + listaProt +
+                          (protegidos.length > 10 ? '\n  ... y ' + (protegidos.length - 10) + ' mas' : '') + '\n\n'
+                        : '') +
                     (conAjuste.length
                         ? 'AJUSTE RETROACTIVO -- ' + conAjuste.length + ' agente(s), +' + totalTot + ' totopos:\n' + lista +
                           (conAjuste.length > 10 ? '\n  ... y ' + (conAjuste.length - 10) + ' mas' : '') +
@@ -9862,14 +9909,19 @@
                 // puede estar sincronizando su bitacora en este mismo instante y
                 // sin esto uno de los dos pisa al otro.
                 let okCount = 0, errCount = 0, archivados = 0, ajustados = 0, totopos = 0;
+                let protCount = 0;
                 for (const p of plan) {
-                    const r = p.r, mult = p.mult;
+                    const r = p.r;
                     const uref = doc(db, 'users', r.email);
                     try {
                         await runTransaction(db, async (tx) => {
                             const snap = await tx.get(uref);
                             const data = snap.exists() ? snap.data() : {};
                             const prev = data.multiplier || null;
+                            // Se vuelve a aplicar aca y no se reusa p.mult: entre la
+                            // vista previa y esta escritura pudo cambiar el doc.
+                            const mult = _aplicarPiso(_multObj(r), prev);
+                            if (mult.protegido) protCount++;
                             const res = _recalcRetro(data, mult, basePts);
 
                             const payload = { multiplier: mult };
@@ -9918,9 +9970,9 @@
                     if (msg) msg.textContent = 'Guardando... ' + (okCount + errCount) + '/' + plan.length;
                 }
                 if (archivados) console.log('[mult] archivados en multiplierHistory: ' + archivados);
-                const extra = ajustados
+                const extra = (ajustados
                     ? ' - ajuste retroactivo a ' + ajustados + ' agente(s), +' + totopos + ' totopos'
-                    : '';
+                    : '') + (protCount ? ' - ' + protCount + ' conservaron el suyo' : '');
                 if (msg) msg.innerHTML = errCount
                     ? '<span style="color:var(--red);">Listo con ' + errCount + ' error(es). ' + okCount + ' guardados' + extra + '.</span>'
                     : '<span style="color:var(--green);"><i class="fa fa-check"></i> ' + okCount + ' multiplicadores otorgados' + extra + '.</span>';
