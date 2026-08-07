@@ -2998,7 +2998,7 @@
             <div style="display:flex;flex-direction:column;gap:12px;">
                 <div>
                     <label class="field-label">Agente</label>
-                    <select id="mult-manual-agente" style="width:100%;padding:9px;font-size:13px;"></select>
+                    <select id="mult-manual-agente" onchange="_multManualPreview()" style="width:100%;padding:9px;font-size:13px;"></select>
                 </div>
                 <div>
                     <label class="field-label">Bono sobre el día (%)</label>
@@ -3006,9 +3006,20 @@
                            oninput="_multManualPreview()" style="font-size:18px;font-weight:700;text-align:center;">
                     <div id="mult-manual-vale" style="font-size:11.5px;color:var(--slate);margin-top:5px;text-align:center;"></div>
                 </div>
+                <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;
+                              background:rgba(255,255,255,0.04);border:1px solid var(--border);
+                              border-radius:8px;padding:10px 12px;">
+                    <input type="checkbox" id="mult-manual-cobertura" onchange="_multManualPreview()"
+                           style="width:15px;height:15px;margin-top:2px;cursor:pointer;flex-shrink:0;">
+                    <span style="font-size:12px;line-height:1.45;">
+                        <b>Descontar los días que no reportó</b><br>
+                        <span style="color:var(--slate);">Igual que el cálculo automático: el bono se
+                        multiplica por los días que reportó del mes anterior.</span>
+                    </span>
+                </label>
                 <div>
                     <label class="field-label">Mes que paga</label>
-                    <input type="month" id="mult-manual-mes" style="width:100%;padding:9px;font-size:13px;">
+                    <input type="month" id="mult-manual-mes" onchange="_multManualPreview()" style="width:100%;padding:9px;font-size:13px;">
                     <div style="font-size:11px;color:var(--slate);margin-top:4px;line-height:1.45;">
                         Sólo multiplica los días de ESE mes. Los días de ese mes que el agente
                         ya cobró se recalculan y se le abona la diferencia.
@@ -3393,7 +3404,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.33.0';
+        window.APP_HTML_VERSION = 'v2.34.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -8797,6 +8808,11 @@
             document.getElementById('mult-manual-mes').value = (m && m.month) ||
                 (hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0'));
             document.getElementById('mult-manual-nota').value = (m && m.nota) || '';
+            document.getElementById('mult-manual-cobertura').checked = !!(m && m.porCobertura);
+            // Si venia con descuento, el campo muestra lo que se PIDIO, no lo que
+            // quedo: si mostrara lo que quedo, reabrir y guardar lo descontaria
+            // otra vez sobre si mismo.
+            if (m && m.porCobertura && m.tierPct) document.getElementById('mult-manual-bono').value = m.tierPct;
             document.getElementById('mult-manual-msg').innerHTML = '';
             document.getElementById('mult-manual-quitar').style.display = (m && m.earned) ? '' : 'none';
             document.getElementById('mult-manual-title').innerHTML = (m && m.earned)
@@ -8811,29 +8827,80 @@
         window.cerrarMultManual = function () {
             document.getElementById('mult-manual-modal').classList.remove('open');
         };
+        // "2026-08" -> "Julio 2026". El multiplicador se gana en un mes y paga en
+        // el siguiente, asi que los dias que cuentan son los del mes ANTERIOR al
+        // que paga -- igual que en el calculo automatico.
+        function _mesBaseDe(monthKey) {
+            const p = String(monthKey || '').split('-');
+            let y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1;
+            if (!y || !m) return null;
+            if (m < 1) { m = 12; y -= 1; }
+            return MONTHS_ES[m - 1] + ' ' + y;
+        }
+
+        // Devuelve como queda el bono con y sin descuento, para que la previa y
+        // el guardado no puedan discrepar.
+        function _multManualCalculo() {
+            const email = (document.getElementById('mult-manual-agente') || {}).value || '';
+            const pedido = Number(document.getElementById('mult-manual-bono').value) || 0;
+            const mes = String((document.getElementById('mult-manual-mes') || {}).value || '').trim();
+            const descontar = !!(document.getElementById('mult-manual-cobertura') || {}).checked;
+            const out = { email, pedido, mes, descontar, bono: pedido,
+                          cobertura: 0, dias: 0, diasDelMes: 0, mesBase: null };
+            if (!descontar || !/^\d{4}-\d{2}$/.test(mes)) return out;
+            const mesBase = _mesBaseDe(mes);
+            if (!mesBase) return out;
+            const cov = _coverageByEmail(mesBase);
+            out.mesBase = mesBase;
+            out.dias = cov.days[email] || 0;
+            out.diasDelMes = cov.daysInMonth || 0;
+            out.cobertura = out.diasDelMes ? out.dias / out.diasDelMes : 0;
+            out.bono = Math.round(pedido * out.cobertura);
+            return out;
+        }
+
         window._multManualPreview = function () {
-            const b = Number(document.getElementById('mult-manual-bono').value) || 0;
+            const c = _multManualCalculo();
             const base = _numVal('pts-agent', 10);
             const el = document.getElementById('mult-manual-vale');
-            if (el) el.textContent = b > 0
-                ? 'Cada día reportado de ese mes le valdría ' + Math.round(base * (1 + b / 100)) +
-                  ' totopos en vez de ' + base + '.'
-                : '';
+            if (!el) return;
+            if (c.pedido <= 0) { el.innerHTML = ''; return; }
+            const vale = Math.round(base * (1 + c.bono / 100));
+            if (!c.descontar) {
+                el.innerHTML = 'Cada día reportado de ese mes le valdría <b>' + vale +
+                    '</b> totopos en vez de ' + base + '.';
+                return;
+            }
+            if (!c.mesBase) {
+                el.innerHTML = '<span style="color:var(--red);">Elegí el mes que paga para poder contar los días.</span>';
+                return;
+            }
+            const pct = c.diasDelMes ? Math.round(c.cobertura * 100) : 0;
+            el.innerHTML =
+                'Reportó <b>' + c.dias + ' de ' + c.diasDelMes + '</b> días de ' + c.mesBase +
+                ' (' + pct + '%).<br>De <b>+' + c.pedido + '%</b> queda <b style="color:var(--gold-l);">+' +
+                c.bono + '%</b> · cada día valdría <b>' + vale + '</b> en vez de ' + base + '.' +
+                (c.bono === 0 ? '<br><span style="color:var(--red);">Con 0 días reportados el bono queda en 0.</span>' : '');
         };
 
         // Escribe el multiplicador y, si sube, reparte hacia atras los dias de
         // ese mes que ya se pagaron. Misma transaccion y mismo archivo que el
         // otorgamiento masivo: no hay dos caminos distintos para el mismo dato.
         async function _escribirMultManual(email, quitar) {
-            const bono = Number(document.getElementById('mult-manual-bono').value) || 0;
+            const calc = _multManualCalculo();
+            const pedido = calc.pedido;
+            const bono = calc.bono;
             const mes  = String(document.getElementById('mult-manual-mes').value || '').trim();
             const nota = String(document.getElementById('mult-manual-nota').value || '').trim();
             const msg  = document.getElementById('mult-manual-msg');
             if (!email) { msg.innerHTML = '<span style="color:var(--red);">Elegí un agente.</span>'; return; }
             if (!quitar && !/^\d{4}-\d{2}$/.test(mes)) {
                 msg.innerHTML = '<span style="color:var(--red);">Falta el mes que paga.</span>'; return; }
-            if (!quitar && bono <= 0) {
+            if (!quitar && pedido <= 0) {
                 msg.innerHTML = '<span style="color:var(--red);">El bono tiene que ser mayor a 0.</span>'; return; }
+            if (!quitar && bono <= 0) {
+                msg.innerHTML = '<span style="color:var(--red);">Con el descuento el bono queda en 0: no reportó ningún día de ' +
+                    (calc.mesBase || 'el mes anterior') + '.</span>'; return; }
 
             let basePts = 10;
             try {
@@ -8859,12 +8926,19 @@
                             grantedBy: (auth.currentUser && auth.currentUser.email) || 'director'
                           })
                         : {
-                            month: mes, basedOn: prev && prev.basedOn ? prev.basedOn : '',
+                            month: mes,
+                            basedOn: calc.descontar && calc.mesBase ? calc.mesBase
+                                     : (prev && prev.basedOn ? prev.basedOn : ''),
                             earned: true, reason: null,
-                            tierPct: bono, bonusPct: bono, tierMin: 0,
-                            coverage: prev ? (prev.coverage || 0) : 0,
-                            daysReported: prev ? (prev.daysReported || 0) : 0,
-                            daysInMonth: prev ? (prev.daysInMonth || 0) : 0,
+                            // tierPct es lo que el director escribio; bonusPct lo que
+                            // queda despues del descuento. Sin los dos, el recibo no
+                            // puede explicarle al agente por que no son iguales.
+                            tierPct: pedido, bonusPct: bono, tierMin: 0,
+                            coverage: calc.descontar ? Number(calc.cobertura.toFixed(4))
+                                      : (prev ? (prev.coverage || 0) : 0),
+                            daysReported: calc.descontar ? calc.dias : (prev ? (prev.daysReported || 0) : 0),
+                            daysInMonth: calc.descontar ? calc.diasDelMes : (prev ? (prev.daysInMonth || 0) : 0),
+                            porCobertura: !!calc.descontar,
                             reportado: prev ? (prev.reportado || 0) : 0,
                             ingresado: prev ? (prev.ingresado || 0) : 0,
                             desvio: prev ? (prev.desvio || 0) : 0,
@@ -8920,10 +8994,15 @@
         }
 
         window.guardarMultManual = function () {
-            const email = document.getElementById('mult-manual-agente').value;
-            const bono = Number(document.getElementById('mult-manual-bono').value) || 0;
+            const c = _multManualCalculo();
+            const email = c.email;
             const nom = ((state.agents || []).find(a => a.email === email) || {}).name || email;
-            if (!confirm('Otorgar +' + bono + '% a ' + nom + '.\n\nLos días del mes que ya cobró se recalculan y se le abona la diferencia.\n\n¿Continuar?')) return;
+            const linea = c.descontar && c.mesBase
+                ? 'Otorgar a ' + nom + ':\n\n  escribiste  +' + c.pedido + '%\n' +
+                  '  reportó     ' + c.dias + ' de ' + c.diasDelMes + ' días de ' + c.mesBase + '\n' +
+                  '  QUEDA       +' + c.bono + '%\n'
+                : 'Otorgar +' + c.pedido + '% a ' + nom + ', sin descuento por días.\n';
+            if (!confirm(linea + '\nLos días del mes que ya cobró se recalculan y se le abona la diferencia.\n\n¿Continuar?')) return;
             _escribirMultManual(email, false);
         };
         window.quitarMultManual = function () {
