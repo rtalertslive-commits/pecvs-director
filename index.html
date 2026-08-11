@@ -3405,7 +3405,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.35.0';
+        window.APP_HTML_VERSION = 'v2.36.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9505,6 +9505,22 @@
                 return true;
             });
             if (!filtered.length) { alert('Sin canjes para exportar con los filtros actuales.'); return; }
+
+            // Ordenado por AGENTE y luego por ITEM, que es como se arma el lote:
+            // se recorre agente por agente y se juntan sus piezas.
+            //
+            // localeCompare con 'es' y sensitivity base, no `<`. Con la
+            // comparacion cruda "marcelino rodriguez" cae DESPUES de "Victor",
+            // porque las minusculas van despues de todas las mayusculas en el
+            // orden de caracteres — y hay agentes capturados en minuscula. Con
+            // 'base' tambien empareja acentos: Solís y Solis quedan juntos.
+            const cmp = (x, y) => String(x || '').localeCompare(String(y || ''), 'es',
+                { sensitivity: 'base', numeric: true });
+            filtered.sort((a, b) =>
+                cmp(a.nombreSolicitante || a.emailSolicitante, b.nombreSolicitante || b.emailSolicitante) ||
+                cmp(a.itemNombre, b.itemNombre) ||
+                cmp(_premiosDescById[a.itemId] || '', _premiosDescById[b.itemId] || '') ||
+                String(a.fechaSolicitud || '').localeCompare(String(b.fechaSolicitud || '')));
             return filtered;
         };
 
@@ -9556,8 +9572,10 @@
             // El resumen va en las columnas D y E, como el archivo que se pidió.
             filas.push([]);
             filas.push([null, null, null, { v: 'RESUMEN', b: true }]);
+            const cmpRes = (x, y) => String(x || '').localeCompare(String(y || ''), 'es',
+                { sensitivity: 'base', numeric: true });
             [...resumen.values()]
-                .sort((a, b) => a.item.localeCompare(b.item) || a.desc.localeCompare(b.desc))
+                .sort((a, b) => cmpRes(a.item, b.item) || cmpRes(a.desc, b.desc))
                 .forEach(g => filas.push([null, null, null,
                     g.item + (g.desc ? ' — ' + g.desc : ''), { v: g.qty, n: true }]));
             filas.push([]);
