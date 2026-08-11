@@ -2801,7 +2801,8 @@
                             <button id="premios-view-equipo" onclick="setPremiosView('equipo')" class="btn btn-sm" style="background:var(--gold);color:#000;font-weight:700;">Por equipo</button>
                             <button id="premios-view-item" onclick="setPremiosView('item')" class="btn btn-sm">Por item (compra)</button>
                         </div>
-                        <button class="btn btn-sm" onclick="exportPremiosCSV()" style="margin-left:auto;background:rgba(16,185,129,0.15);color:var(--green);border:1px solid var(--green);"><i class="fa fa-download"></i> Exportar CSV</button>
+                        <button class="btn btn-sm" onclick="exportPremiosXLSX()" style="margin-left:auto;background:rgba(16,185,129,0.15);color:var(--green);border:1px solid var(--green);"><i class="fa fa-file-excel"></i> Exportar XLSX</button>
+                        <button class="btn btn-sm" onclick="exportPremiosCSV()" style="background:transparent;color:var(--slate);border:1px solid var(--border);" title="Mismo contenido sin el resumen, para importar a otro sistema">CSV</button>
                     </div>
 
                     <!-- Totales arriba -->
@@ -3404,7 +3405,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.34.0';
+        window.APP_HTML_VERSION = 'v2.35.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -9341,7 +9342,153 @@
             }).join('');
         }
 
-        window.exportPremiosCSV = function () {
+        // ─── XLSX SIN LIBRERIAS ──────────────────────────────────────────────
+        // Un .xlsx es un ZIP con unos XML adentro. Se arma a mano en vez de traer
+        // SheetJS de un CDN por dos razones: la app es PWA y tiene que exportar
+        // sin red —un <script> de CDN no esta precacheado y fallaria justo cuando
+        // el director esta en la oficina sin señal—, y son 90 lineas contra 900 KB.
+        //
+        // El ZIP va con metodo 0 (stored, sin comprimir). Excel lo abre igual y
+        // ahorra tener que implementar DEFLATE. El archivo pesa mas, pero son
+        // decenas de kilobytes.
+        function _crc32(bytes) {
+            let tabla = _crc32.t;
+            if (!tabla) {
+                tabla = _crc32.t = new Int32Array(256);
+                for (let n = 0; n < 256; n++) {
+                    let c = n;
+                    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                    tabla[n] = c;
+                }
+            }
+            let crc = -1;
+            for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ tabla[(crc ^ bytes[i]) & 0xFF];
+            return (crc ^ -1) >>> 0;
+        }
+
+        function _zip(archivos) {
+            const enc = new TextEncoder();
+            const partes = [], central = [];
+            let off = 0;
+            archivos.forEach(f => {
+                const nom = enc.encode(f.nombre);
+                const crc = _crc32(f.datos);
+                const lh = new Uint8Array(30 + nom.length);
+                const dv = new DataView(lh.buffer);
+                dv.setUint32(0, 0x04034b50, true);
+                dv.setUint16(4, 20, true);
+                dv.setUint16(8, 0, true);          // 0 = stored
+                dv.setUint32(14, crc, true);
+                dv.setUint32(18, f.datos.length, true);
+                dv.setUint32(22, f.datos.length, true);
+                dv.setUint16(26, nom.length, true);
+                lh.set(nom, 30);
+                partes.push(lh, f.datos);
+
+                const ch = new Uint8Array(46 + nom.length);
+                const dc = new DataView(ch.buffer);
+                dc.setUint32(0, 0x02014b50, true);
+                dc.setUint16(4, 20, true);
+                dc.setUint16(6, 20, true);
+                dc.setUint16(10, 0, true);
+                dc.setUint32(16, crc, true);
+                dc.setUint32(20, f.datos.length, true);
+                dc.setUint32(24, f.datos.length, true);
+                dc.setUint16(28, nom.length, true);
+                dc.setUint32(42, off, true);
+                ch.set(nom, 46);
+                central.push(ch);
+                off += lh.length + f.datos.length;
+            });
+            const largoCentral = central.reduce((s, a) => s + a.length, 0);
+            const fin = new Uint8Array(22);
+            const df = new DataView(fin.buffer);
+            df.setUint32(0, 0x06054b50, true);
+            df.setUint16(8, archivos.length, true);
+            df.setUint16(10, archivos.length, true);
+            df.setUint32(12, largoCentral, true);
+            df.setUint32(16, off, true);
+            return new Blob(partes.concat(central, [fin]),
+                { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        }
+
+        const _xesc = s => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            // Excel rompe el archivo entero si le entra un caracter de control.
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+        const _colLetra = n => {
+            let s = '';
+            while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = (n - r - 1) / 26; }
+            return s;
+        };
+
+        // filas: array de arrays. Cada celda es un valor suelto (texto) o
+        // { v, n:true } para numero y { v, b:true } para negrita.
+        function _hojaXml(filas, anchos) {
+            const cols = (anchos || []).map((w, i) =>
+                '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>').join('');
+            const xml = filas.map((fila, fi) => {
+                const celdas = (fila || []).map((cel, ci) => {
+                    if (cel == null || cel === '') return '';
+                    const o = (typeof cel === 'object') ? cel : { v: cel };
+                    const ref = _colLetra(ci + 1) + (fi + 1);
+                    const est = o.b ? ' s="1"' : '';
+                    return o.n
+                        ? '<c r="' + ref + '"' + est + '><v>' + (Number(o.v) || 0) + '</v></c>'
+                        : '<c r="' + ref + '"' + est + ' t="inlineStr"><is><t xml:space="preserve">' +
+                          _xesc(o.v) + '</t></is></c>';
+                }).join('');
+                return celdas ? '<row r="' + (fi + 1) + '">' + celdas + '</row>' : '';
+            }).join('');
+            return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+                (cols ? '<cols>' + cols + '</cols>' : '') +
+                '<sheetData>' + xml + '</sheetData></worksheet>';
+        }
+
+        function _descargarXlsx(nombreArchivo, nombreHoja, filas, anchos) {
+            const enc = new TextEncoder();
+            const R = 'http://schemas.openxmlformats.org/';
+            const partes = [
+                ['[Content_Types].xml',
+                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="' + R + 'package/2006/content-types">' +
+                 '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+                 '<Default Extension="xml" ContentType="application/xml"/>' +
+                 '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+                 '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+                 '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+                ['_rels/.rels',
+                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="' + R + 'package/2006/relationships">' +
+                 '<Relationship Id="rId1" Type="' + R + 'officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+                ['xl/workbook.xml',
+                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="' + R + 'spreadsheetml/2006/main" ' +
+                 'xmlns:r="' + R + 'officeDocument/2006/relationships"><sheets><sheet name="' + _xesc(nombreHoja) +
+                 '" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+                ['xl/_rels/workbook.xml.rels',
+                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="' + R + 'package/2006/relationships">' +
+                 '<Relationship Id="rId1" Type="' + R + 'officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+                 '<Relationship Id="rId2" Type="' + R + 'officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+                ['xl/styles.xml',
+                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="' + R + 'spreadsheetml/2006/main">' +
+                 '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>' +
+                 '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+                 '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
+                 '<fill><patternFill patternType="gray125"/></fill></fills>' +
+                 '<borders count="1"><border/></borders>' +
+                 '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+                 '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+                 '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>'],
+                ['xl/worksheets/sheet1.xml', _hojaXml(filas, anchos)]
+            ].map(x => ({ nombre: x[0], datos: enc.encode(x[1]) }));
+
+            const url = URL.createObjectURL(_zip(partes));
+            const a = document.createElement('a');
+            a.href = url; a.download = nombreArchivo;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function _premiosFiltrados() {
             const period = document.getElementById('premios-period').value;
             const status = document.getElementById('premios-status').value;
             const promotorFilter = document.getElementById('premios-promotor').value;
@@ -9358,6 +9505,79 @@
                 return true;
             });
             if (!filtered.length) { alert('Sin canjes para exportar con los filtros actuales.'); return; }
+            return filtered;
+        };
+
+        window.exportPremiosXLSX = function () {
+            const filtered = _premiosFiltrados();
+            if (!filtered) return;
+            const ENC = ['Fecha','Promotor','Coach','Agente','Item','Descripción','Cantidad','Costo (totopos)','Status','Entregado','Fecha entrega'];
+            const filas = [ENC.map(h => ({ v: h, b: true }))];
+
+            // El resumen agrupa por ITEM + DESCRIPCION, no por nombre. Dos plumas
+            // con logotipos distintos son dos articulos distintos cuando hay que
+            // armar la caja, y con el nombre solo se juntarian en un renglon.
+            const resumen = new Map();
+            let piezas = 0, totopos = 0;
+
+            filtered.forEach(r => {
+                const coach = (state.coaches || []).find(c => (c.companyCode || c.agentTeamCode) === r.coachTeamCode);
+                const coachName = coach ? (coach.coachName || coach.email) : `(clave ${r.coachTeamCode || ''})`;
+                let promotorName = '—';
+                if (coach) {
+                    const prom = (state.promoters || []).find(p => (p.companyCode || p.promotorCode) === coach.promotorTeamCode);
+                    promotorName = prom ? (prom.promoterName || prom.email) : `(clave ${coach.promotorTeamCode || ''})`;
+                }
+                const dateStr = r.status === 'pending' ? r.fechaSolicitud : (r.fechaResolucion || r.fechaSolicitud || '');
+                const qty = Number(r.cantidad) || 1;
+                const costo = Number(r.costo) || 0;
+                const item = r.itemNombre || '';
+                const desc = (r.itemId != null ? (_premiosDescById[r.itemId] || '') : '');
+
+                filas.push([
+                    dateStr ? new Date(dateStr).toLocaleDateString('es-MX') : '',
+                    promotorName, coachName,
+                    r.nombreSolicitante || r.emailSolicitante || '',
+                    item, desc,
+                    { v: qty, n: true },
+                    { v: costo, n: true },
+                    r.status || '',
+                    r.entregado ? 'Sí' : 'No',
+                    r.fechaEntrega ? new Date(r.fechaEntrega).toLocaleDateString('es-MX') : ''
+                ]);
+
+                const clave = item + ' ‖ ' + desc;
+                const acc = resumen.get(clave) || { item, desc, qty: 0, totopos: 0 };
+                acc.qty += qty; acc.totopos += qty * costo;
+                resumen.set(clave, acc);
+                piezas += qty; totopos += qty * costo;
+            });
+
+            // El resumen va en las columnas D y E, como el archivo que se pidió.
+            filas.push([]);
+            filas.push([null, null, null, { v: 'RESUMEN', b: true }]);
+            [...resumen.values()]
+                .sort((a, b) => a.item.localeCompare(b.item) || a.desc.localeCompare(b.desc))
+                .forEach(g => filas.push([null, null, null,
+                    g.item + (g.desc ? ' — ' + g.desc : ''), { v: g.qty, n: true }]));
+            filas.push([]);
+            // El total va aqui y no sumando la columna H: ahi el costo es UNITARIO,
+            // asi que sumarla da un numero que no significa nada.
+            filas.push([null, null, null, { v: 'TOTAL PIEZAS', b: true }, { v: piezas, n: true, b: true }]);
+            filas.push([null, null, null, { v: 'TOTAL TOTOPOS', b: true }, { v: totopos, n: true, b: true }]);
+
+            const now = new Date();
+            const period = document.getElementById('premios-period').value;
+            _descargarXlsx(
+                `premios-${period}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`,
+                'Premios',
+                filas,
+                [11, 24, 26, 26, 26, 34, 9, 15, 11, 11, 13]);
+        };
+
+        window.exportPremiosCSV = function () {
+            const filtered = _premiosFiltrados();
+            if (!filtered) return;
             const rows = [['Fecha','Promotor','Coach','Agente','Item','Descripción','Cantidad','Costo (totopos)','Status','Entregado','Fecha entrega']];
             filtered.forEach(r => {
                 const coach = (state.coaches || []).find(c => (c.companyCode || c.agentTeamCode) === r.coachTeamCode);
@@ -9391,6 +9611,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             const now = new Date();
+            const period = document.getElementById('premios-period').value;
             const fname = `premios-${period}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.csv`;
             a.href = url; a.download = fname;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
