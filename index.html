@@ -3405,7 +3405,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.36.0';
+        window.APP_HTML_VERSION = 'v2.37.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -10166,6 +10166,19 @@
 
             const ganan = rows.filter(r => r.earned);
             const money = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-MX');
+
+            // Para los "por cuanto fallo": aqui redondear MIENTE. Eliud Norato
+            // ingreso $4,999.73 con el escalon en $5,000 — le faltaron 27
+            // centavos, y Math.round los imprimia como "$0", que se lee como
+            // "no le falto nada" y por lo tanto como que si alcanzo. Es el mismo
+            // problema que ya tenia el desvio con "10%" (ver pctDesvio abajo).
+            // Debajo del peso se muestran los centavos.
+            const moneyFino = n => {
+                const v = Number(n) || 0;
+                return v > 0 && v < 1
+                    ? '$' + v.toFixed(2)
+                    : '$' + Math.round(v).toLocaleString('es-MX');
+            };
             const mesSig = (() => {
                 const p = String(mes).trim().split(' ');
                 const m = MONTHS_ES.indexOf(p[0]) + 1;
@@ -10192,8 +10205,8 @@
                     // produccion: es a quien el mes de gracia tiene que alcanzar.
                     if (r.sinNada) return `<span style="color:var(--slate);">Sin producción y sin reportar</span>`;
                     return r.coincide
-                        ? `<span style="color:var(--orange);">Coincidió, no alcanzó el escalón</span> <span style="color:var(--slate);">(le faltaron ${money(r.faltaEscalon)})</span>`
-                        : `<span style="color:var(--red);">Ni coincidió ni alcanzó</span> <span style="color:var(--slate);">(${pctDesvio(r.desvio, cfg.margin)}% de desvío · faltaron ${money(r.faltaEscalon)})</span>`;
+                        ? `<span style="color:var(--orange);">Coincidió, no alcanzó el escalón</span> <span style="color:var(--slate);">(le faltaron ${moneyFino(r.faltaEscalon)})</span>`
+                        : `<span style="color:var(--red);">Ni coincidió ni alcanzó</span> <span style="color:var(--slate);">(${pctDesvio(r.desvio, cfg.margin)}% de desvío · faltaron ${moneyFino(r.faltaEscalon)})</span>`;
                 }
                 if (r.reason === 'coincidencia') {
                     // El tope contesta la pregunta que sigue: "y entonces cuanto
@@ -10278,7 +10291,7 @@
                           `<b>${r.name}</b> <span style="color:var(--slate);">${r.code}</span>` +
                           (r.coincide ? ' <span style="color:var(--green);">coincidió</span>'
                                       : ` <span style="color:var(--red);">${pctDesvio(r.desvio, cfg.margin)}% desvío</span>`),
-                          `faltaron ${money(r.faltaEscalon)} · ${r.daysReported}/${r.daysInMonth}`)).join('')}
+                          `faltaron ${moneyFino(r.faltaEscalon)} · ${r.daysReported}/${r.daysInMonth}`)).join('')}
                       </div>` : ''}
                       ${cercaCoi.length ? `<div>
                         <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--red);font-weight:900;margin-bottom:7px;">
@@ -10286,7 +10299,7 @@
                         </div>
                         ${cercaCoi.map(r => fila(
                           `<b>${r.name}</b> <span style="color:var(--slate);">${r.code}</span>`,
-                          `se pasó por ${money(r.excesoPesos)} · ${pctDesvio(r.desvio, cfg.margin)}% · ${r.daysReported}/${r.daysInMonth}`)).join('')}
+                          `se pasó por ${moneyFino(r.excesoPesos)} · ${pctDesvio(r.desvio, cfg.margin)}% · ${r.daysReported}/${r.daysInMonth}`)).join('')}
                       </div>` : ''}
                     </div>
                   </div>`;
