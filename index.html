@@ -3405,7 +3405,7 @@
         // version PUBLICADA y no la que se estaba EJECUTANDO: con el HTML viejo
         // en cache el header decia una version y corria otra, y era imposible
         // darse cuenta de estar desactualizado.
-        window.APP_HTML_VERSION = 'v2.37.0';
+        window.APP_HTML_VERSION = 'v2.38.0';
 
         // Escape hatch manual: tocar el numero de version fuerza la
         // actualizacion. Borra SOLO las entradas de navegacion del cache, no
@@ -8951,6 +8951,24 @@
 
                     const res = _recalcRetro(data, mult, basePts);
                     const payload = { multiplier: mult };
+                    // Se guarda el multiplicador que se esta reemplazando, para que
+                    // la app pueda pagar los dias del mes que ya cerro con el bono que
+                    // les tocaba. Un dia se paga al dia siguiente y solo cuando el
+                    // agente abre la app: si otorgas el dia 1 y el abre despues, el
+                    // ultimo dia del mes pasado se cobraba sin bono. En agosto le paso
+                    // a 8 agentes y son 60 totopos.
+                    //
+                    // Solo cuando el mes CAMBIA. Re-otorgar el mismo mes no debe pisar
+                    // el del mes anterior con una copia del actual — y al omitir el
+                    // campo, el merge:true lo deja intacto.
+                    if (prev && typeof prev.month === 'string' && prev.month &&
+                        prev.month !== mult.month) {
+                        payload.multiplierPrev = {
+                            month: prev.month,
+                            earned: prev.earned === true,
+                            bonusPct: Number(prev.bonusPct) || 0
+                        };
+                    }
                     if (res.delta > 0) {
                         // La celebracion del agente muestra este texto. Decirle
                         // "recalculo" a un regalo no es lo que paso: no se
@@ -10501,6 +10519,24 @@
                             const res = _recalcRetro(data, mult, basePts);
 
                             const payload = { multiplier: mult };
+                            // Se guarda el multiplicador que se esta reemplazando, para que
+                            // la app pueda pagar los dias del mes que ya cerro con el bono que
+                            // les tocaba. Un dia se paga al dia siguiente y solo cuando el
+                            // agente abre la app: si otorgas el dia 1 y el abre despues, el
+                            // ultimo dia del mes pasado se cobraba sin bono. En agosto le paso
+                            // a 8 agentes y son 60 totopos.
+                            //
+                            // Solo cuando el mes CAMBIA. Re-otorgar el mismo mes no debe pisar
+                            // el del mes anterior con una copia del actual — y al omitir el
+                            // campo, el merge:true lo deja intacto.
+                            if (prev && typeof prev.month === 'string' && prev.month &&
+                                prev.month !== mult.month) {
+                                payload.multiplierPrev = {
+                                    month: prev.month,
+                                    earned: prev.earned === true,
+                                    bonusPct: Number(prev.bonusPct) || 0
+                                };
+                            }
                             if (res.delta > 0) {
                                 // Marca propia del recalculo. Sirve para dos cosas:
                                 // deja rastro de que el ajuste existio, y le cambia
